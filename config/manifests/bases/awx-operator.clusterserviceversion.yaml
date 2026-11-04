@@ -5,11 +5,11 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     categories: Integration & Delivery
-    containerImage: quay.io/ansible/awx-operator:devel
+    containerImage: ghcr.io/belfry-project/belfry-operator:main
     createdAt: "2019-10-30"
     description: AWX provides a web-based user interface, REST API, and task engine
       built on top of Ansible.
-    repository: https://github.com/ansible/awx-operator
+    repository: https://github.com/belfry-project/belfry-operator
     support: forum.ansible.com
   name: awx-operator.v0.0.0
   namespace: placeholder
@@ -1228,7 +1228,7 @@ spec:
     ## How to Install
 
     Install the AWX Operator by following instructions presented when you click the Install button.
-    You can find additional installation guidance in the README.md: https://github.com/ansible/awx-operator/blob/devel/README.md
+    You can find additional installation guidance in the README.md: https://github.com/belfry-project/belfry-operator/blob/main/README.md
 
     ## How to Upgrade
 
@@ -1259,7 +1259,7 @@ spec:
   - ansible
   links:
   - name: AWX Operator
-    url: https://github.com/ansible/awx-operator
+    url: https://github.com/belfry-project/belfry-operator
   maintainers:
   - email: awx-project@googlegroups.com
     name: AWX Team
@@ -1267,5 +1267,5 @@ spec:
   minKubeVersion: 1.22.15
   provider:
     name: Ansible
-    url: github.com/ansible/awx-operator
+    url: github.com/belfry-project/belfry-operator
   version: 0.0.0

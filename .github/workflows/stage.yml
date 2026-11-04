@@ -40,7 +40,7 @@ jobs:
       - name: Checkout awx-operator
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/awx-operator
+          repository: ${{ github.repository }}
           path: awx-operator
 
       - name: Install playbook dependencies

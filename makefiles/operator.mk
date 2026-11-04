@@ -6,7 +6,7 @@
 
 VERSION ?= $(shell git describe --tags 2>/dev/null || echo 0.0.1)
 PREV_VERSION ?= $(shell git describe --abbrev=0 --tags $(shell git rev-list --tags --skip=1 --max-count=1) 2>/dev/null)
-IMAGE_TAG_BASE ?= quay.io/ansible/awx-operator
+IMAGE_TAG_BASE ?= ghcr.io/belfry-project/belfry-operator
 NAMESPACE ?= awx
 DEPLOYMENT_NAME ?= awx-operator-controller-manager
 
