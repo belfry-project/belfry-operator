@@ -27,7 +27,7 @@ jobs:
 
       - name: Set IMAGE_TAG_BASE
         run: |
-          echo "IMAGE_TAG_BASE=ghcr.io/${OWNER_LC}/awx-operator" >>${GITHUB_ENV}
+          echo "IMAGE_TAG_BASE=ghcr.io/${OWNER_LC}/belfry-operator" >>${GITHUB_ENV}
 
       - name: Log in to registry
         run: |
