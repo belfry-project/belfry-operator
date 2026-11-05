@@ -130,6 +130,7 @@ jobs:
         run: |
           tests/upgrade/port-forward.sh awx 8080
           AWX_ADMIN_PASSWORD="$(tests/upgrade/admin-password.sh awx)" python tests/upgrade/check.py verify "$AWX_URL"
+          tests/upgrade/debug-auth.sh awx  # TEMPORARY: compare with the restored instance
 
       - name: Delete the upgraded instance
         run: |
@@ -166,9 +167,12 @@ jobs:
           kubectl -n awx get awx,awxbackup,awxrestore,deployments,statefulsets,pods,jobs,pvc -o wide || true
           kubectl -n awx get awxbackup,awxrestore -o yaml || true
           kubectl -n awx get awx -o jsonpath='{range .items[*]}{.metadata.name}: {.status}{"\n"}{end}' || true
+          kubectl -n awx get networkpolicies,secrets || true
           kubectl -n awx get events --sort-by=.lastTimestamp | tail -100 || true
           kubectl -n awx describe pods || true
-          kubectl -n awx logs deployment/awx-operator-controller-manager -c awx-manager --tail=1000 || true
+          # The operator's playbook output, without the proxy's cache messages
+          kubectl -n awx logs deployment/awx-operator-controller-manager -c awx-manager \
+            | grep -v -e '"logger":"proxy"' | tail -1500 || true
           for pod in $(kubectl -n awx get pods -o name | grep -E 'db-management|migration'); do
             kubectl -n awx logs "$pod" --all-containers --tail=200 || true
           done

@@ -1,6 +1,8 @@
 #!/bin/bash
 # Wait until a field in the status of a custom resource has the given value,
-# or any value if none is given. Shows the status while waiting.
+# or any value if none is given. Shows the status while waiting. Gives up
+# after TIMEOUT seconds (default 900; backups and restores of the test data
+# take about a minute).
 # Usage: wait-for-status.sh KIND NAME FIELD [VALUE]
 #   e.g. wait-for-status.sh awxbackup awx-backup backupDirectory
 set -euo pipefail
@@ -8,7 +10,7 @@ kind="$1"
 name="$2"
 field="$3"
 value="${4:-}"
-deadline=$((SECONDS + 1800))
+deadline=$((SECONDS + ${TIMEOUT:-900}))
 last=""
 while true; do
   current="$(kubectl -n awx get "$kind" "$name" -o jsonpath="{.status.$field}" 2>/dev/null || true)"
