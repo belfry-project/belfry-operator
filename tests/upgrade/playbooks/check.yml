@@ -1,0 +1,15 @@
+---
+# Used by the upgrade test: proves that the injected credential can be decrypted
+# and that facts are cached, before and after the upgrade.
+- name: Upgrade test
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Show a hash of the secret injected by the test credential
+      ansible.builtin.debug:
+        msg: "secret-sha256={{ lookup('ansible.builtin.env', 'BELFRY_UPGRADE_SECRET') | hash('sha256') }}"
+
+    - name: Record which phase of the test ran
+      ansible.builtin.set_fact:
+        upgrade_test_phase: "{{ phase }}"
+        cacheable: true
