@@ -1,26 +1,29 @@
-# AWX Operator
+# Belfry Operator
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Build Status](https://github.com/ansible/awx-operator/workflows/CI/badge.svg?event=push)](https://github.com/ansible/awx-operator/actions)
-[![Code of Conduct](https://img.shields.io/badge/code%20of%20conduct-Ansible-yellow.svg)](https://docs.ansible.com/ansible/latest/community/code_of_conduct.html)
+[![CI](https://github.com/belfry-project/belfry-operator/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/belfry-project/belfry-operator/actions)
 
-An [Ansible AWX](https://github.com/ansible/awx) operator for Kubernetes built with [Operator SDK](https://github.com/operator-framework/operator-sdk) and Ansible.
+A Kubernetes operator for [Belfry](https://github.com/belfry-project/belfry), the community continuation of AWX, built with [Operator SDK](https://github.com/operator-framework/operator-sdk) and Ansible.
 
-The AWX Operator is meant to be deployed in your Kubernetes cluster(s) and can be used to install and manage the lifecycle of an AWX instance in the same namespace.
+The Belfry Operator is meant to be deployed in your Kubernetes cluster(s) and can be used to install and manage the lifecycle of a Belfry instance in the same namespace. It is a continuation of the [AWX Operator](https://github.com/ansible/awx-operator), and keeps its resources: instances are still described by `AWX`, `AWXBackup` and `AWXRestore` resources in the `awx.ansible.com` API group, so installations made with awx-operator can switch to belfry-operator.
+
+Images: `ghcr.io/belfry-project/belfry-operator`. A Helm chart is available in [belfry-project/helm-charts](https://github.com/belfry-project/helm-charts).
 
 ## Documentation
 
-The AWX Operator documentation is available at <https://ansible.readthedocs.io/projects/awx-operator/>
+The Belfry documentation is available at <https://belfry-project.github.io/>. The operator documentation in [docs/](./docs) is based on the [AWX Operator documentation](https://ansible.readthedocs.io/projects/awx-operator/).
 
-> Helm chart documentation is available at <https://ansible-community.github.io/awx-operator-helm/>
+AWX and Ansible are trademarks of Red Hat, Inc. Belfry is not affiliated with or endorsed by Red Hat, Inc.
 
 ## Contributing
 
-Please visit our [contributing guidelines](https://github.com/ansible/awx-operator/blob/devel/CONTRIBUTING.md) and [development guide](https://github.com/ansible/awx-operator/blob/devel/docs/development.md) for information on how to set up your environment, build and deploy the operator, and submit changes.
+Please visit our [contributing guidelines](./CONTRIBUTING.md) and [development guide](./docs/development.md) for information on how to set up your environment, build and deploy the operator, and submit changes.
 
 ## Author
 
-This operator was originally built in 2019 by [Jeff Geerling](https://www.jeffgeerling.com) and is now maintained by the Ansible Team
+This operator was originally built in 2019 by [Jeff Geerling](https://www.jeffgeerling.com) as the AWX Operator and was maintained by the Ansible Team. The Belfry Operator is maintained by the [Belfry project](https://github.com/belfry-project).
+
+Issues and pull requests for the Belfry Operator go to [belfry-project/belfry-operator](https://github.com/belfry-project/belfry-operator/issues).
 
 ## Code of Conduct
 
