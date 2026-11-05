@@ -3,12 +3,17 @@
   "extends": ["github>belfry-project/.github"],
   "packageRules": [
     {
-      "description": "The ansible-operator base image and the Makefile's OPERATOR_SDK_VERSION must match",
+      "description": "The ansible-operator base image and the Makefile's OPERATOR_SDK_VERSION must match. The base image is Belfry's rebuild from belfry-project/image-mirror, so a new upstream version lands there first.",
       "matchDepNames": [
-        "quay.io/operator-framework/ansible-operator",
+        "ghcr.io/belfry-project/ansible-operator",
         "operator-framework/ansible-operator-plugins"
       ],
       "groupName": "operator-sdk"
+    },
+    {
+      "description": "Belfry's ansible-operator rebuild is tagged <upstream version>-belfry.<n>",
+      "matchDepNames": ["ghcr.io/belfry-project/ansible-operator"],
+      "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-belfry\\.(?<build>\\d+)$"
     }
   ]
 }
