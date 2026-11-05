@@ -107,7 +107,9 @@ jobs:
       - name: Create data in AWX 24.6.1
         run: |
           tests/upgrade/port-forward.sh awx 8080
-          AWX_ADMIN_PASSWORD="$(tests/upgrade/admin-password.sh awx)" python tests/upgrade/check.py seed "$AWX_URL"
+          # A plain assignment fails the step if the password cannot be read
+          password="$(tests/upgrade/admin-password.sh awx)"
+          AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py seed "$AWX_URL"
 
       - name: Back up AWX 24.6.1 with awx-operator 2.19.1
         run: |
@@ -129,8 +131,9 @@ jobs:
       - name: Check the data and run jobs in Belfry
         run: |
           tests/upgrade/port-forward.sh awx 8080
-          AWX_ADMIN_PASSWORD="$(tests/upgrade/admin-password.sh awx)" python tests/upgrade/check.py verify "$AWX_URL"
-          tests/upgrade/debug-auth.sh awx "$AWX_URL"  # TEMPORARY: compare with the restored instance
+          # A plain assignment fails the step if the password cannot be read
+          password="$(tests/upgrade/admin-password.sh awx)"
+          AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$AWX_URL"
 
       - name: Delete the upgraded instance
         run: |
@@ -151,6 +154,8 @@ jobs:
           kubectl apply -f tests/upgrade/awxrestore.yaml
           tests/upgrade/wait-for-status.sh awxrestore awx-restore restoreComplete true
           tests/upgrade/wait-for-awx.sh "$BELFRY_IMAGE" awx-restored
+          # Set at the end of the operator's first reconciliation of the new instance
+          tests/upgrade/wait-for-status.sh awx awx-restored adminPasswordSecret
           # The operator migrated the restored 24.6.1 database with a Job for the Belfry image
           kubectl -n awx get jobs -o custom-columns=NAME:.metadata.name,SUCCEEDED:.status.succeeded | tee /tmp/jobs.txt
           grep -E '^awx-restored-migration-\S+\s+1$' /tmp/jobs.txt
@@ -158,7 +163,9 @@ jobs:
       - name: Check the data and run jobs in the restored instance
         run: |
           tests/upgrade/port-forward.sh awx-restored 8081
-          AWX_ADMIN_PASSWORD="$(tests/upgrade/admin-password.sh awx-restored)" python tests/upgrade/check.py verify "$RESTORED_URL"
+          # A plain assignment fails the step if the password cannot be read
+          password="$(tests/upgrade/admin-password.sh awx-restored)"
+          AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$RESTORED_URL"
 
       - name: Show the cluster state on failure
         if: failure()
