@@ -245,9 +245,9 @@ jobs:
   # published operator image, and restores a 24.6.1 backup into it.
   upgrade-test:
     needs: [setup, publish]
-    uses: belfry-project/belfry-operator/.github/workflows/upgrade-test.yml@upgrade-test-backup-restore  # TEMPORARY until #17 is merged, then ./.github/workflows/upgrade-test.yml
+    uses: belfry-project/belfry-operator/.github/workflows/upgrade-test.yml@upgrade-test-backup-restore  # TEMPORARY until #17 is merged
     with:
-      ref: upgrade-test-backup-restore  # TEMPORARY until #17 is merged, then ${{ needs.setup.outputs.ref }}
+      ref: upgrade-test-backup-restore  # TEMPORARY until #17 is merged
       operator_image: ghcr.io/belfry-project/belfry-operator:${{ needs.setup.outputs.image_tag }}
       awx_version: ${{ needs.setup.outputs.awx_version }}
 
