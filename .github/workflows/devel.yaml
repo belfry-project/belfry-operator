@@ -5,19 +5,29 @@ name: Devel
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    name: Push main image
+  # Each architecture is built on a native runner and pushed as <sha>-<arch>.
+  # The merge job combines them into the multi-arch :<sha> and :main tags.
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - {platform: linux/amd64, runner: ubuntu-latest, suffix: amd64}
+          - {platform: linux/arm64, runner: ubuntu-24.04-arm, suffix: arm64}
+    runs-on: ${{ matrix.runner }}
+    name: Build ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: docker/setup-qemu-action@v3
 
       - name: Log into registry ghcr.io
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567    # v3.3.0
@@ -29,10 +39,33 @@ jobs:
       - name: Build and push image to ghcr.io
         run: |
           BUILD_ARGS="--label org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
-          IMG=ghcr.io/${{ github.repository }}:${{ github.sha }} make docker-buildx
+          PLATFORMS=${{ matrix.platform }} \
+          IMG=${IMAGE}:${{ github.sha }}-${{ matrix.suffix }} make docker-buildx
+          # make docker-buildx ignores build errors, so check that the image exists
+          docker buildx imagetools inspect ${IMAGE}:${{ github.sha }}-${{ matrix.suffix }}
 
-      - name: Tag image as main
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Publish multi-arch tags
+    steps:
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log into registry ghcr.io
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567    # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag image as <sha> and main
         run: |
-          docker buildx imagetools create \
-            ghcr.io/${{ github.repository }}:${{ github.sha }} \
-            --tag ghcr.io/${{ github.repository }}:main
+          # Manual runs on other branches only publish <sha>
+          tags="--tag ${IMAGE}:${{ github.sha }}"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            tags="${tags} --tag ${IMAGE}:main"
+          fi
+          docker buildx imagetools create ${tags} \
+            --annotation="index:org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            ${IMAGE}:${{ github.sha }}-amd64 ${IMAGE}:${{ github.sha }}-arm64
+          docker buildx imagetools inspect ${IMAGE}:${{ github.sha }}
