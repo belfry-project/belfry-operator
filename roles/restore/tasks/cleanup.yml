@@ -8,8 +8,13 @@
     state: absent
     force: true
 
+# The restored instance uses the secret names from the backed-up spec, which
+# keep the old instance's names (e.g. awx-admin-password). Only patch secrets
+# that exist: 'present' would create empty secrets named after the new
+# instance, and those look like the instance's real admin password secret.
 - name: Remove ownerReferences from secrets to avoid garbage collection
   k8s:
+    state: patched
     definition:
       apiVersion: v1
       kind: Secret
@@ -18,10 +23,10 @@
         namespace: '{{ ansible_operator_meta.namespace }}'
         ownerReferences: null
   loop:
-    - '{{ secret_key_secret }}'
-    - '{{ admin_password_secret }}'
-    - '{{ broadcast_websocket_secret }}'
-    - '{{ postgres_configuration_secret }}'
+    - "{{ spec['secret_key_secret'] | default(secret_key_secret, true) }}"
+    - "{{ spec['admin_password_secret'] | default(admin_password_secret, true) }}"
+    - "{{ spec['broadcast_websocket_secret'] | default(broadcast_websocket_secret, true) }}"
+    - "{{ spec['postgres_configuration_secret'] | default(postgres_configuration_secret, true) }}"
   no_log: "{{ no_log }}"
 
 - name: Cleanup temp spec file
