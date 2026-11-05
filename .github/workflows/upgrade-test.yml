@@ -156,6 +156,9 @@ jobs:
           tests/upgrade/wait-for-awx.sh "$BELFRY_IMAGE" awx-restored
           # Set at the end of the operator's first reconciliation of the new instance
           tests/upgrade/wait-for-status.sh awx awx-restored adminPasswordSecret
+          # The restore leaves no empty secrets behind (belfry-operator#24)
+          kubectl -n awx get secrets -o custom-columns=NAME:.metadata.name,DATA:.data | tee /tmp/secrets.txt
+          if grep -E '\s<none>$' /tmp/secrets.txt; then echo "Empty secrets after the restore" >&2; exit 1; fi
           # The operator migrated the restored 24.6.1 database with a Job for the Belfry image
           kubectl -n awx get jobs -o custom-columns=NAME:.metadata.name,SUCCEEDED:.status.succeeded | tee /tmp/jobs.txt
           grep -E '^awx-restored-migration-\S+\s+1$' /tmp/jobs.txt
