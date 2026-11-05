@@ -1,0 +1,10 @@
+# The AWX instance used by the upgrade test. It sets no images, so each operator
+# deploys its own defaults: AWX 24.6.1 with awx-operator 2.19.1, and Belfry
+# after switching to belfry-operator.
+apiVersion: awx.ansible.com/v1beta1
+kind: AWX
+metadata:
+  name: awx
+  namespace: awx
+spec:
+  service_type: ClusterIP

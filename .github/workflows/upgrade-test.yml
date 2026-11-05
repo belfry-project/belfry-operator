@@ -1,0 +1,72 @@
+---
+
+name: Upgrade from AWX
+
+# Installs AWX 24.6.1 with awx-operator 2.19.1, creates data, switches to this
+# repository's belfry-operator on the same AWX resource, and checks that the
+# data survived and new jobs work.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * 1'
+  pull_request:
+    paths:
+      - 'tests/upgrade/**'
+      - '.github/workflows/upgrade-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AWX_URL: http://localhost:8080
+      PROJECT_BRANCH: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.15.1
+        with:
+          cluster_name: upgrade
+
+      - name: Install awx-operator 2.19.1 and AWX 24.6.1
+        run: |
+          kubectl apply -k tests/upgrade/awx-operator-2.19.1
+          kubectl -n awx rollout status deployment/awx-operator-controller-manager --timeout=10m
+          kubectl apply -f tests/upgrade/awx.yaml
+          tests/upgrade/wait-for-awx.sh quay.io/ansible/awx:24.6.1
+
+      - name: Create data in AWX 24.6.1
+        run: |
+          tests/upgrade/port-forward.sh
+          AWX_ADMIN_PASSWORD=$(kubectl -n awx get secret awx-admin-password -o jsonpath='{.data.password}' | base64 -d) python tests/upgrade/check.py seed
+
+      - name: Switch to belfry-operator
+        run: |
+          docker build --build-arg DEFAULT_AWX_VERSION=main -t belfry-operator:upgrade-test .
+          kind load docker-image --name upgrade belfry-operator:upgrade-test
+          make deploy IMG=belfry-operator:upgrade-test
+          kubectl -n awx rollout status deployment/awx-operator-controller-manager --timeout=10m
+          tests/upgrade/wait-for-awx.sh ghcr.io/belfry-project/belfry:main
+
+      - name: Check the data and run jobs in Belfry
+        run: |
+          tests/upgrade/port-forward.sh
+          AWX_ADMIN_PASSWORD=$(kubectl -n awx get secret awx-admin-password -o jsonpath='{.data.password}' | base64 -d) python tests/upgrade/check.py verify
+
+      - name: Show the cluster state on failure
+        if: failure()
+        run: |
+          kubectl -n awx get awx,deployments,pods,jobs,pvc -o wide || true
+          kubectl -n awx describe pods || true
+          kubectl -n awx logs deployment/awx-operator-controller-manager -c awx-manager --tail=300 || true
+          kubectl -n awx logs deployment/awx-web --all-containers --tail=200 || true
+          kubectl -n awx logs deployment/awx-task --all-containers --tail=200 || true

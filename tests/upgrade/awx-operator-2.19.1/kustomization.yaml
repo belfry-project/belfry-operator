@@ -1,0 +1,15 @@
+# awx-operator 2.19.1 as released, for the upgrade test.
+#
+# Its kube-rbac-proxy sidecar image (gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0)
+# no longer exists, so 2.19.1 cannot be installed as published. The same version
+# from quay.io/brancz is used instead, as AWX users have to do as well.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/ansible/awx-operator/config/default?ref=2.19.1
+images:
+  - name: quay.io/ansible/awx-operator
+    newTag: 2.19.1
+  - name: gcr.io/kubebuilder/kube-rbac-proxy
+    newName: quay.io/brancz/kube-rbac-proxy
+    newTag: v0.15.0
