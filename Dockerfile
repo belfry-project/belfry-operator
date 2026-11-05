@@ -4,6 +4,12 @@ USER root
 RUN microdnf update -y && \
     microdnf install -y openssl
 
+# Upgrade Python packages of the base image that have known vulnerabilities
+COPY requirements-security.txt /tmp/requirements-security.txt
+RUN python3.12 -m pip install --no-cache-dir --upgrade -r /tmp/requirements-security.txt \
+ && python3.12 -m pip check \
+ && rm /tmp/requirements-security.txt
+
 USER 1001
 
 ARG DEFAULT_AWX_VERSION
