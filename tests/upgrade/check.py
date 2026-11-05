@@ -30,7 +30,7 @@ NAME = 'upgrade-test'
 STATE = 'upgrade-state.json'
 
 
-def api(method, path, data=None, ok=(200, 201, 202, 204)):
+def api(method, path, data=None, ok=(200, 201, 202, 204), text=False):
     request = urllib.request.Request(
         URL + path,
         data=json.dumps(data).encode() if data is not None else None,
@@ -45,7 +45,7 @@ def api(method, path, data=None, ok=(200, 201, 202, 204)):
             body = response.read().decode()
             if response.status not in ok:
                 raise RuntimeError(f'{method} {path}: HTTP {response.status} {body[:500]}')
-            return json.loads(body) if body and body.lstrip().startswith(('{', '[')) else body
+            return body if text or not body else json.loads(body)
     except urllib.error.HTTPError as e:
         raise RuntimeError(f'{method} {path}: HTTP {e.code} {e.read().decode()[:1000]}') from None
 
@@ -89,7 +89,7 @@ def wait_for(path, timeout=900):
 def run_job(template_id, phase):
     job = api('POST', f'/api/v2/job_templates/{template_id}/launch/', {'extra_vars': {'phase': phase}})
     job = wait_for(f'/api/v2/jobs/{job["job"]}/')
-    stdout = api('GET', f'/api/v2/jobs/{job["id"]}/stdout/?format=txt')
+    stdout = api('GET', f'/api/v2/jobs/{job["id"]}/stdout/?format=txt', text=True)
     if job['status'] != 'successful':
         raise RuntimeError(f'Job {job["id"]} ({phase}) ended {job["status"]}:\n{stdout}')
     if f'secret-sha256={SECRET_HASH}' not in stdout:
@@ -173,7 +173,7 @@ def verify():
     get_one('/api/v2/credentials/', NAME)
     get_one('/api/v2/projects/', NAME)
     old_job = api('GET', f'/api/v2/jobs/{state["job"]}/')
-    if old_job['status'] != 'successful' or f'secret-sha256={SECRET_HASH}' not in api('GET', f'/api/v2/jobs/{old_job["id"]}/stdout/?format=txt'):
+    if old_job['status'] != 'successful' or f'secret-sha256={SECRET_HASH}' not in api('GET', f'/api/v2/jobs/{old_job["id"]}/stdout/?format=txt', text=True):
         raise RuntimeError('The job from before the upgrade, or its output, did not survive')
     host, facts = host_facts(inventory['id'])
     if facts.get('upgrade_test_phase') != 'before' or facts.get('ansible_distribution') != state['distribution']:
