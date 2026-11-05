@@ -99,7 +99,14 @@ def wait_for(path, timeout=900):
 def run_job(template_id, phase):
     job = api('POST', f'/api/v2/job_templates/{template_id}/launch/', {'extra_vars': {'phase': phase}})
     job = wait_for(f'/api/v2/jobs/{job["job"]}/')
-    stdout = api('GET', f'/api/v2/jobs/{job["id"]}/stdout/?format=txt', text=True)
+    # Job events are saved asynchronously, so the output can lag behind the
+    # job's status; wait until the play recap is in
+    deadline = time.time() + 120
+    while True:
+        stdout = api('GET', f'/api/v2/jobs/{job["id"]}/stdout/?format=txt', text=True)
+        if 'PLAY RECAP' in stdout or time.time() > deadline:
+            break
+        time.sleep(5)
     if job['status'] != 'successful':
         raise RuntimeError(f'Job {job["id"]} ({phase}) ended {job["status"]}:\n{stdout}')
     if f'secret-sha256={SECRET_HASH}' not in stdout:
