@@ -1,0 +1,9 @@
+# Backup of the AWX 24.6.1 instance, made by awx-operator 2.19.1 before the
+# switch. The operator creates the PVC awx-backup-claim for it.
+apiVersion: awx.ansible.com/v1beta1
+kind: AWXBackup
+metadata:
+  name: awx-backup
+  namespace: awx
+spec:
+  deployment_name: awx

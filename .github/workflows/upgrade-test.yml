@@ -2,12 +2,60 @@
 
 name: Upgrade from AWX
 
-# Installs AWX 24.6.1 with awx-operator 2.19.1, creates data, switches to this
-# repository's belfry-operator on the same AWX resource, and checks that the
-# data survived and new jobs work.
+# Installs AWX 24.6.1 with awx-operator 2.19.1, creates data and backs it up
+# with an AWXBackup. Then switches to belfry-operator on the same AWX resource
+# and checks that the data survived and new jobs work. Finally deletes that
+# instance, restores the 24.6.1 backup into a new instance with an AWXRestore
+# (which migrates the database to Belfry), and checks the same data there.
+#
+# Inputs (workflow_dispatch and workflow_call; the schedule and pull requests
+# use the defaults):
+#   ref             Git ref of belfry-operator whose tests and deploy manifests
+#                   (config/) are used. Default: the commit that triggered the
+#                   run, or the default branch when called from another
+#                   repository.
+#   operator_image  belfry-operator image to switch to, e.g.
+#                   ghcr.io/belfry-project/belfry-operator:1.0.0. Default: build
+#                   one from the checkout, with DEFAULT_AWX_VERSION=awx_version.
+#   awx_version     Belfry version the operator deploys by default, i.e. the
+#                   tag of ghcr.io/belfry-project/belfry the upgraded and
+#                   restored instances must run. Used as DEFAULT_AWX_VERSION
+#                   when building the operator; with operator_image it must
+#                   match that image's DEFAULT_AWX_VERSION. Default: main.
+#
+# A release workflow can run it with:
+#   uses: belfry-project/belfry-operator/.github/workflows/upgrade-test.yml@<ref>
+#   with: {ref: <tag>, operator_image: ..., awx_version: <version>}
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref of belfry-operator to test (default the selected branch)
+        type: string
+        default: ''
+      operator_image:
+        description: belfry-operator image to switch to (default build from the checkout)
+        type: string
+        default: ''
+      awx_version:
+        description: Belfry version (image tag) the operator deploys by default
+        type: string
+        default: main
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref of belfry-operator to test (default the calling commit, or the default branch from another repository)
+        type: string
+        default: ''
+      operator_image:
+        description: belfry-operator image to switch to (default build from the checkout)
+        type: string
+        default: ''
+      awx_version:
+        description: Belfry version (image tag) the operator deploys by default
+        type: string
+        default: main
   schedule:
     - cron: '23 4 * * 1'
   pull_request:
@@ -21,12 +69,24 @@ permissions:
 jobs:
   upgrade:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       AWX_URL: http://localhost:8080
-      PROJECT_BRANCH: ${{ github.event.pull_request.head.sha || github.sha }}
+      RESTORED_URL: http://localhost:8081
+      OPERATOR_IMAGE: ${{ inputs.operator_image }}
+      AWX_VERSION: ${{ inputs.awx_version || 'main' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: belfry-project/belfry-operator
+          # github.sha belongs to the caller when called from another repository
+          ref: ${{ inputs.ref || (github.repository == 'belfry-project/belfry-operator' && (github.event.pull_request.head.sha || github.sha)) || '' }}
+
+      - name: Set up the test
+        run: |
+          # AWX checks out this commit as the project with the test playbook
+          echo "PROJECT_BRANCH=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "BELFRY_IMAGE=ghcr.io/belfry-project/belfry:$AWX_VERSION" >> "$GITHUB_ENV"
 
       - uses: actions/setup-python@v5
         with:
@@ -46,27 +106,68 @@ jobs:
 
       - name: Create data in AWX 24.6.1
         run: |
-          tests/upgrade/port-forward.sh
-          AWX_ADMIN_PASSWORD=$(kubectl -n awx get secret awx-admin-password -o jsonpath='{.data.password}' | base64 -d) python tests/upgrade/check.py seed
+          tests/upgrade/port-forward.sh awx 8080
+          AWX_ADMIN_PASSWORD=$(kubectl -n awx get secret awx-admin-password -o jsonpath='{.data.password}' | base64 -d) python tests/upgrade/check.py seed "$AWX_URL"
+
+      - name: Back up AWX 24.6.1 with awx-operator 2.19.1
+        run: |
+          kubectl apply -f tests/upgrade/awxbackup.yaml
+          tests/upgrade/wait-for-status.sh awxbackup awx-backup backupDirectory
+          kubectl -n awx get awxbackup awx-backup -o jsonpath='{.status}{"\n"}'
 
       - name: Switch to belfry-operator
         run: |
-          docker build --build-arg DEFAULT_AWX_VERSION=main -t belfry-operator:upgrade-test .
-          kind load docker-image --name upgrade belfry-operator:upgrade-test
-          make deploy IMG=belfry-operator:upgrade-test
+          if [ -z "$OPERATOR_IMAGE" ]; then
+            OPERATOR_IMAGE=belfry-operator:upgrade-test
+            docker build --build-arg DEFAULT_AWX_VERSION="$AWX_VERSION" -t "$OPERATOR_IMAGE" .
+            kind load docker-image --name upgrade "$OPERATOR_IMAGE"
+          fi
+          make deploy IMG="$OPERATOR_IMAGE"
           kubectl -n awx rollout status deployment/awx-operator-controller-manager --timeout=10m
-          tests/upgrade/wait-for-awx.sh ghcr.io/belfry-project/belfry:main
+          tests/upgrade/wait-for-awx.sh "$BELFRY_IMAGE"
 
       - name: Check the data and run jobs in Belfry
         run: |
-          tests/upgrade/port-forward.sh
-          AWX_ADMIN_PASSWORD=$(kubectl -n awx get secret awx-admin-password -o jsonpath='{.data.password}' | base64 -d) python tests/upgrade/check.py verify
+          tests/upgrade/port-forward.sh awx 8080
+          AWX_ADMIN_PASSWORD=$(kubectl -n awx get secret awx-admin-password -o jsonpath='{.data.password}' | base64 -d) python tests/upgrade/check.py verify "$AWX_URL"
+
+      - name: Delete the upgraded instance
+        run: |
+          # The restore must work from the backup alone, and the runner has
+          # room for one instance at a time. Its secrets are owned by the AWX
+          # resource; wait until they are gone so the restore recreates them.
+          kubectl -n awx delete awx awx --wait --timeout=10m
+          kubectl -n awx wait --for=delete deployment/awx-web deployment/awx-task statefulset/awx-postgres-15 \
+            secret/awx-admin-password secret/awx-secret-key --timeout=10m
+
+      - name: Restore the AWX 24.6.1 backup with belfry-operator
+        run: |
+          kubectl apply -f tests/upgrade/awxrestore.yaml
+          tests/upgrade/wait-for-status.sh awxrestore awx-restore restoreComplete true
+          tests/upgrade/wait-for-awx.sh "$BELFRY_IMAGE" awx-restored
+          # The operator migrated the restored 24.6.1 database with a Job for the Belfry image
+          kubectl -n awx get jobs -o custom-columns=NAME:.metadata.name,SUCCEEDED:.status.succeeded | tee /tmp/jobs.txt
+          grep -E '^awx-restored-migration-\S+\s+1$' /tmp/jobs.txt
+
+      - name: Check the data and run jobs in the restored instance
+        run: |
+          tests/upgrade/port-forward.sh awx-restored 8081
+          AWX_ADMIN_PASSWORD=$(kubectl -n awx get secret awx-admin-password -o jsonpath='{.data.password}' | base64 -d) python tests/upgrade/check.py verify "$RESTORED_URL"
 
       - name: Show the cluster state on failure
         if: failure()
         run: |
-          kubectl -n awx get awx,deployments,pods,jobs,pvc -o wide || true
+          set -x
+          kubectl -n awx get awx,awxbackup,awxrestore,deployments,statefulsets,pods,jobs,pvc -o wide || true
+          kubectl -n awx get awxbackup,awxrestore -o yaml || true
+          kubectl -n awx get awx -o jsonpath='{range .items[*]}{.metadata.name}: {.status}{"\n"}{end}' || true
+          kubectl -n awx get events --sort-by=.lastTimestamp | tail -100 || true
           kubectl -n awx describe pods || true
-          kubectl -n awx logs deployment/awx-operator-controller-manager -c awx-manager --tail=300 || true
-          kubectl -n awx logs deployment/awx-web --all-containers --tail=200 || true
-          kubectl -n awx logs deployment/awx-task --all-containers --tail=200 || true
+          kubectl -n awx logs deployment/awx-operator-controller-manager -c awx-manager --tail=1000 || true
+          for pod in $(kubectl -n awx get pods -o name | grep -E 'db-management|migration'); do
+            kubectl -n awx logs "$pod" --all-containers --tail=200 || true
+          done
+          for instance in awx awx-restored; do
+            kubectl -n awx logs "deployment/$instance-web" --all-containers --tail=200 || true
+            kubectl -n awx logs "deployment/$instance-task" --all-containers --tail=200 || true
+          done

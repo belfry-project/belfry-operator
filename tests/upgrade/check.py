@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Create data in AWX before an upgrade, and verify it afterwards.
 
-Usage: check.py seed | check.py verify
+Usage: check.py seed [URL] | check.py verify [URL]
 
-Talks to the AWX API at AWX_URL (default http://localhost:8080) as admin with
-AWX_ADMIN_PASSWORD. seed writes upgrade-state.json, which verify reads.
+Talks to the AWX API at URL, or AWX_URL (default http://localhost:8080), as
+admin with AWX_ADMIN_PASSWORD. seed writes upgrade-state.json, which verify
+reads. verify can run against any instance that has the seeded data: the
+upgraded one, or a new one restored from a backup made after seeding.
 
 The data covers what users care about when upgrading: an organization, an
 inventory with a host and cached facts, a credential with a secret, a project,
@@ -193,4 +195,7 @@ def verify():
 
 
 if __name__ == '__main__':
+    if len(sys.argv) > 2:
+        URL = sys.argv[2].rstrip('/')
+    print(f'Using {URL}')
     {'seed': seed, 'verify': verify}[sys.argv[1]]()
