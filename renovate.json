@@ -1,4 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>belfry-project/.github"]
+  "extends": ["github>belfry-project/.github"],
+  "packageRules": [
+    {
+      "description": "The ansible-operator base image and the Makefile's OPERATOR_SDK_VERSION must match",
+      "matchDepNames": [
+        "quay.io/operator-framework/ansible-operator",
+        "operator-framework/ansible-operator-plugins"
+      ],
+      "groupName": "operator-sdk"
+    }
+  ]
 }

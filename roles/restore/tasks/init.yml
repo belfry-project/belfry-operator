@@ -117,4 +117,4 @@
         msg: "{{ error_msg }}"
   when:
     - backup_dir != ''
-    - stat_backup_dir.return_code != 0
+    - stat_backup_dir.rc != 0
