@@ -173,6 +173,9 @@ jobs:
             kubectl -n awx logs "$pod" --all-containers --tail=200 || true
           done
           for instance in awx awx-restored; do
+            if kubectl -n awx get deployment "$instance-web" > /dev/null 2>&1; then
+              tests/upgrade/debug-auth.sh "$instance" || true
+            fi
             kubectl -n awx logs "deployment/$instance-web" --all-containers --tail=200 || true
             kubectl -n awx logs "deployment/$instance-task" --all-containers --tail=200 || true
           done

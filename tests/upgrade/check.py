@@ -54,6 +54,7 @@ def api(method, path, data=None, ok=(200, 201, 202, 204), text=False):
 
 def wait_for_api(timeout=1200):
     deadline = time.time() + timeout
+    rejected_since = None
     while True:
         try:
             ping = api('GET', '/api/v2/ping/')
@@ -67,6 +68,13 @@ def wait_for_api(timeout=1200):
         except Exception as e:  # noqa: BLE001 - keep polling until the deadline
             if time.time() > deadline:
                 raise RuntimeError(f'AWX API not ready after {timeout}s: {e}') from None
+            # The API answers, but keeps rejecting the admin credentials
+            if 'HTTP 401' in str(e):
+                rejected_since = rejected_since or time.time()
+                if time.time() - rejected_since > 300:
+                    raise RuntimeError(f'AWX API rejected the admin credentials for 300s: {e}') from None
+            else:
+                rejected_since = None
             time.sleep(10)
 
 
