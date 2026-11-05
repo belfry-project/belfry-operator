@@ -56,6 +56,11 @@ def wait_for_api(timeout=1200):
         try:
             ping = api('GET', '/api/v2/ping/')
             api('GET', '/api/v2/me/')
+            # The API answers before the task instance is ready, and creating objects
+            # such as hosts schedules background tasks that need one
+            instances = api('GET', '/api/v2/instances/')['results']
+            if not any(i['node_state'] == 'ready' and i['enabled'] and i['capacity'] > 0 for i in instances):
+                raise RuntimeError(f'no ready instance yet: {[(i["hostname"], i["node_state"], i["capacity"]) for i in instances]}')
             return ping
         except Exception as e:  # noqa: BLE001 - keep polling until the deadline
             if time.time() > deadline:
