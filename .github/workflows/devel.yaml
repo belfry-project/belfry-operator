@@ -48,6 +48,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     name: Publish multi-arch tags
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     steps:
       - uses: docker/setup-buildx-action@v3
 
@@ -69,3 +74,34 @@ jobs:
             --annotation="index:org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
             ${IMAGE}:${{ github.sha }}-amd64 ${IMAGE}:${{ github.sha }}-arm64
           docker buildx imagetools inspect ${IMAGE}:${{ github.sha }}
+
+      - name: Get the image digest
+        id: digest
+        run: |
+          digest=$(docker buildx imagetools inspect "${IMAGE}:${{ github.sha }}" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+
+      # Signed statement of which repository, commit and workflow built the image.
+      # Verify with: gh attestation verify oci://<image> --owner belfry-project
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.digest.outputs.digest }}
+          push-to-registry: true
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.digest.outputs.digest }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+
+      - name: Attest SBOM
+        uses: actions/attest-sbom@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.digest.outputs.digest }}
+          sbom-path: sbom.spdx.json
+          push-to-registry: true
