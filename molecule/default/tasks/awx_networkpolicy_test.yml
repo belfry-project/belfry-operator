@@ -71,6 +71,10 @@
           - "'Egress' in np_postgres.resources[0].spec.policyTypes"
           - np_postgres.resources[0].spec.ingress | length > 0
           - np_postgres.resources[0].spec.egress | length > 0
+          # Backup and restore pods carry the name of their AWXBackup or AWXRestore
+          - >-
+            {'app.kubernetes.io/managed-by': 'awx-operator', 'app.kubernetes.io/component': 'db-management'}
+            in np_postgres.resources[0].spec.ingress[0]['from'] | map(attribute='podSelector') | map(attribute='matchLabels') | list
         fail_msg: "postgres NetworkPolicy is missing or misconfigured"
 
     - name: Get db-management NetworkPolicy

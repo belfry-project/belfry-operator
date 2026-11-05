@@ -1,8 +1,12 @@
 ---
-site_name: Ansible AWX Operator Documentation
-site_url: https://awx-operator.readthedocs.io/
-repo_url: https://github.com/ansible/awx-operator
-edit_uri: blob/devel/docs/
+site_name: Belfry Operator documentation
+site_url: https://belfry-project.github.io/docs/operator/
+repo_url: https://github.com/belfry-project/belfry-operator
+edit_uri: blob/main/docs/
+# Shown in the footer of every page
+copyright: >-
+  Based on the AWX Operator documentation. Belfry is not affiliated with Red Hat, Inc.;
+  AWX and Ansible are trademarks of Red Hat, Inc.
 docs_dir: docs
 strict: true
 use_directory_urls: false
@@ -17,8 +21,12 @@ validation:
     absolute_links: warn
     unrecognized_links: warn
 
+# Published by the belfry-project.github.io pages workflow, with the Belfry
+# colours and logo instead of the Ansible theme
 theme:
-  name: "ansible"
+  name: material
+  logo: assets/belfry.svg
+  favicon: assets/belfry.png
   features:
     - content.code.copy
     - content.action.edit
@@ -33,16 +41,16 @@ theme:
     - search.suggest
   palette:
     - media: "(prefers-color-scheme: light)"
-      primary: teal
-      accent: blue
+      primary: custom
+      accent: custom
       scheme: default
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: teal
-      accent: blue
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -100,6 +108,9 @@ nav:
       - contributors-guide/author.md
       - contributors-guide/code-of-conduct.md
       - contributors-guide/get-involved.md
+
+extra_css:
+  - assets/belfry.css
 
 exclude_docs:
   README.md
