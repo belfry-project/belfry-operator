@@ -6,16 +6,16 @@ There are variables that are customizable for awx the image management.
 
 | Name                          | Description                   | Default                                    |
 | ----------------------------- | ----------------------------- | ------------------------------------------ |
-| image                         | Path of the image to pull     | quay.io/ansible/awx                        |
+| image                         | Path of the image to pull     | ghcr.io/belfry-project/belfry              |
 | image_version                 | Image version to pull         | value of DEFAULT_AWX_VERSION or latest     |
 | image_pull_policy             | The pull policy to adopt      | IfNotPresent                               |
 | image_pull_secrets            | The pull secrets to use       | None                                       |
-| ee_images                     | A list of EEs to register     | quay.io/ansible/awx-ee:DEFAULT_AWX_VERSION |
+| ee_images                     | A list of EEs to register     | ghcr.io/belfry-project/belfry-ee:DEFAULT_AWX_VERSION |
 | ee_pull_credentials_secret    | The pull secret for ee_images | None                                       |
 | redis_image                   | Path of the image to pull     | docker.io/redis                            |
-| redis_image_version           | Image version to pull         | latest                                     |
-| control_plane_ee_image        | Image version to pull         | quay.io/ansible/awx-ee:DEFAULT_AWX_VERSION |
-| init_container_image          | Path of the image to pull     | quay.io/ansible/awx-ee                     |
+| redis_image_version           | Image version to pull         | 8.10.3                                     |
+| control_plane_ee_image        | Image version to pull         | ghcr.io/belfry-project/belfry-ee:DEFAULT_AWX_VERSION |
+| init_container_image          | Path of the image to pull     | ghcr.io/belfry-project/belfry-ee           |
 | init_container_image_version  | Image version to pull         | value of DEFAULT_AWX_VERSION or latest     |
 | init_projects_container_image | Image version to pull         | quay.io/centos/centos:stream9              |
 
@@ -40,7 +40,7 @@ spec:
 ```
 
 !!! warning
-    The `image` and `image_version` are intended for local mirroring scenarios. Please note that using a version of AWX other than the one bundled with the `awx-operator` is **not** supported. For the default values, check the [main.yml](https://github.com/ansible/awx-operator/blob/devel/roles/installer/defaults/main.yml) file.
+    The `image` and `image_version` are intended for local mirroring scenarios. Please note that using a version of AWX other than the one bundled with the `awx-operator` is **not** supported. For the default values, check the [main.yml](https://github.com/belfry-project/belfry-operator/blob/main/roles/installer/defaults/main.yml) file.
 
 ## Default execution environments from private registries
 

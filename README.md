@@ -1,26 +1,28 @@
-# AWX Operator
+# Belfry Operator
+
+!!! note
+    This is the reference documentation of the Belfry Operator, which deploys [Belfry](https://belfry-project.github.io/docs/), a community continuation of AWX, on Kubernetes. It is based on the [AWX Operator documentation](https://ansible.readthedocs.io/projects/awx-operator/), and still uses the name AWX where the operator keeps AWX's names, such as the `AWX` resource and the `awx-operator-controller-manager` deployment.
+
+    To install Belfry or migrate an AWX installation to it, start with the [Belfry guides](https://belfry-project.github.io/docs/).
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Build Status](https://github.com/ansible/awx-operator/workflows/CI/badge.svg?event=push)](https://github.com/ansible/awx-operator/actions)
-[![Code of Conduct](https://img.shields.io/badge/code%20of%20conduct-Ansible-yellow.svg)](https://docs.ansible.com/ansible/latest/community/code_of_conduct.html)
+[![CI](https://github.com/belfry-project/belfry-operator/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/belfry-project/belfry-operator/actions)
 
-An [Ansible AWX](https://github.com/ansible/awx) operator for Kubernetes built with [Operator SDK](https://github.com/operator-framework/operator-sdk) and Ansible.
+A Kubernetes operator for [Belfry](https://github.com/belfry-project/belfry), built with [Operator SDK](https://github.com/operator-framework/operator-sdk) and Ansible. It is a continuation of the [AWX Operator](https://github.com/ansible/awx-operator).
 
-The AWX Operator is meant to be deployed in your Kubernetes cluster(s) and can be used to install and manage the lifecycle of an AWX instance in the same namespace.
+The Belfry Operator is meant to be deployed in your Kubernetes cluster(s) and can be used to install and manage the lifecycle of a Belfry instance in the same namespace. Instances are described by `AWX`, `AWXBackup` and `AWXRestore` resources in the `awx.ansible.com` API group, as with the AWX Operator.
 
 ## Documentation
 
-The AWX Operator documentation is available at <https://ansible.readthedocs.io/projects/awx-operator/>
-
-> Helm chart documentation is available at <https://ansible-community.github.io/awx-operator-helm/>
+These pages are published at <https://belfry-project.github.io/docs/operator/>. The Helm chart is in [belfry-project/helm-charts](https://github.com/belfry-project/helm-charts), see [installing with Helm](https://belfry-project.github.io/docs/install/).
 
 ## Contributing
 
-Please visit our [contributing guidelines](https://github.com/ansible/awx-operator/blob/devel/CONTRIBUTING.md) and [development guide](https://github.com/ansible/awx-operator/blob/devel/docs/development.md) for information on how to set up your environment, build and deploy the operator, and submit changes.
+Please visit our [contributing guidelines](https://github.com/belfry-project/belfry-operator/blob/main/CONTRIBUTING.md) and [development guide](development.md) for information on how to set up your environment, build and deploy the operator, and submit changes.
 
 ## Author
 
-This operator was originally built in 2019 by [Jeff Geerling](https://www.jeffgeerling.com) and is now maintained by the Ansible Team
+This operator was originally built in 2019 by [Jeff Geerling](https://www.jeffgeerling.com) as the AWX Operator and was maintained by the Ansible Team. The Belfry Operator is maintained by the [Belfry project](https://github.com/belfry-project).
 
 ## Code of Conduct
 
@@ -28,7 +30,7 @@ We ask all of our community members and contributors to adhere to the [Ansible c
 
 ## Get Involved
 
-We welcome your feedback, questions and ideas. Here's how to reach the community.
+We welcome your feedback, questions and ideas. For the Belfry Operator, open an [issue](https://github.com/belfry-project/belfry-operator/issues) or a pull request on GitHub. The forum and Matrix channels below belong to the Ansible and AWX community, which Belfry is not part of.
 
 ### Forum
 

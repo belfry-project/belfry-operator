@@ -1,0 +1,45 @@
+/* Belfry colours: navy, blue and gold, as in the logo and the comparison page. */
+:root {
+  --belfry-navy: #1b2a4e;
+  --belfry-navy-dark: #0d1526;
+  --belfry-blue: #2f62d6;
+  --belfry-blue-light: #7da2ff;
+  --belfry-gold: #e9a521;
+  --belfry-gold-light: #ffd76a;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--belfry-navy);
+  --md-primary-fg-color--light: #2a3d6b;
+  --md-primary-fg-color--dark: var(--belfry-navy-dark);
+  --md-primary-bg-color: #ffffff;
+  --md-accent-fg-color: var(--belfry-gold);
+  --md-accent-fg-color--transparent: rgba(233, 165, 33, 0.1);
+  --md-typeset-a-color: var(--belfry-blue);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 222;
+  --md-default-bg-color: #0f1522;
+  --md-primary-fg-color: var(--belfry-navy-dark);
+  --md-primary-fg-color--light: var(--belfry-navy);
+  --md-primary-fg-color--dark: #080d18;
+  --md-primary-bg-color: #e7ecf5;
+  --md-accent-fg-color: var(--belfry-gold-light);
+  --md-accent-fg-color--transparent: rgba(255, 215, 106, 0.1);
+  --md-typeset-a-color: var(--belfry-blue-light);
+}
+
+/* The logo is a square tile; round it a little in the header. */
+.md-header__button.md-logo img {
+  border-radius: 4px;
+}
+
+/* Gold underline for the active tab and headings anchors on hover. */
+.md-typeset h1 {
+  font-weight: 650;
+}
+.md-typeset .headerlink:hover,
+.md-typeset .headerlink:focus {
+  color: var(--md-accent-fg-color);
+}
