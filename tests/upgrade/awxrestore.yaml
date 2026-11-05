@@ -1,0 +1,11 @@
+# Restore of the AWX 24.6.1 backup into a new instance, made by
+# belfry-operator. The new instance gets the backed-up spec (no images set, so
+# it runs Belfry) and secrets, and the operator migrates the restored database.
+apiVersion: awx.ansible.com/v1beta1
+kind: AWXRestore
+metadata:
+  name: awx-restore
+  namespace: awx
+spec:
+  deployment_name: awx-restored
+  backup_name: awx-backup
