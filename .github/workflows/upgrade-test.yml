@@ -130,7 +130,7 @@ jobs:
         run: |
           tests/upgrade/port-forward.sh awx 8080
           AWX_ADMIN_PASSWORD="$(tests/upgrade/admin-password.sh awx)" python tests/upgrade/check.py verify "$AWX_URL"
-          tests/upgrade/debug-auth.sh awx  # TEMPORARY: compare with the restored instance
+          tests/upgrade/debug-auth.sh awx "$AWX_URL"  # TEMPORARY: compare with the restored instance
 
       - name: Delete the upgraded instance
         run: |
@@ -178,7 +178,8 @@ jobs:
           done
           for instance in awx awx-restored; do
             if kubectl -n awx get deployment "$instance-web" > /dev/null 2>&1; then
-              tests/upgrade/debug-auth.sh "$instance" || true
+              url="$AWX_URL"; [ "$instance" = awx ] || url="$RESTORED_URL"
+              tests/upgrade/debug-auth.sh "$instance" "$url" || true
             fi
             kubectl -n awx logs "deployment/$instance-web" --all-containers --tail=200 || true
             kubectl -n awx logs "deployment/$instance-task" --all-containers --tail=200 || true
