@@ -11,13 +11,13 @@ Images: `ghcr.io/belfry-project/belfry-operator`. A Helm chart is available in [
 
 ## Documentation
 
-The Belfry documentation is available at <https://belfry-project.github.io/>. The operator documentation in [docs/](./docs) is based on the [AWX Operator documentation](https://ansible.readthedocs.io/projects/awx-operator/).
+The Belfry documentation is available at <https://belfry-project.github.io/>. The operator documentation in [docs/](https://github.com/belfry-project/belfry-operator/tree/main/docs) is based on the [AWX Operator documentation](https://ansible.readthedocs.io/projects/awx-operator/).
 
 AWX and Ansible are trademarks of Red Hat, Inc. Belfry is not affiliated with or endorsed by Red Hat, Inc.
 
 ## Contributing
 
-Please visit our [contributing guidelines](./CONTRIBUTING.md) and [development guide](./docs/development.md) for information on how to set up your environment, build and deploy the operator, and submit changes.
+Please visit our [contributing guidelines](https://github.com/belfry-project/belfry-operator/blob/main/CONTRIBUTING.md) and [development guide](https://github.com/belfry-project/belfry-operator/blob/main/docs/development.md) for information on how to set up your environment, build and deploy the operator, and submit changes.
 
 ## Author
 
