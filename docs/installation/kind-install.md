@@ -59,7 +59,7 @@ kubectl config set-context --current --namespace=awx
 Checkout the tag you want to install from
 
 ```sh
-git checkout 2.7.2
+git checkout <tag>
 ```
 
 Create a file named `kustomization.yaml` in the root of your local awx-operator clone. Include the following:
@@ -68,13 +68,13 @@ Create a file named `kustomization.yaml` in the root of your local awx-operator 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Find the latest tag here: https://github.com/ansible/awx-operator/releases
-  - github.com/ansible/awx-operator/config/default?ref=2.7.2
+  # Find the latest tag here: https://github.com/belfry-project/belfry-operator/releases
+  - github.com/belfry-project/belfry-operator/config/default?ref=<tag>
 
 # Set the image tags to match the git version from above
 images:
-  - name: quay.io/ansible/awx-operator
-    newTag: 2.7.2
+  - name: ghcr.io/belfry-project/belfry-operator
+    newTag: <tag>
 
 # Specify a custom namespace in which to install AWX
 namespace: awx

@@ -32,7 +32,7 @@ type: Opaque
 ```
 
 !!! warning
-    Please ensure that the value for the variable `password` should _not_ contain single or double quotes (`'`, `"`) or backslashes (`\`) to avoid any issues during deployment, [backup](https://github.com/ansible/awx-operator/tree/devel/roles/backup) or [restoration](https://github.com/ansible/awx-operator/tree/devel/roles/restore).
+    Please ensure that the value for the variable `password` should _not_ contain single or double quotes (`'`, `"`) or backslashes (`\`) to avoid any issues during deployment, [backup](https://github.com/belfry-project/belfry-operator/tree/main/roles/backup) or [restoration](https://github.com/belfry-project/belfry-operator/tree/main/roles/restore).
 
 !!! tip
     It is possible to set a specific username, password, port, or database, but still have the database managed by the operator. In this case, when creating the postgres-configuration secret, the `type: managed` field should be added.

@@ -3,13 +3,13 @@
 After cloning this repository, you must choose the tag to run:
 
 ```sh
-git clone git@github.com:ansible/awx-operator.git
-cd awx-operator
+git clone https://github.com/belfry-project/belfry-operator.git
+cd belfry-operator
 git tag
 git checkout tags/<tag>
 
 # For instance:
-git checkout tags/2.7.2
+git checkout tags/1.0.0
 ```
 
 If you work from a fork and made modifications since the tag was issued, you must provide the VERSION number to deploy. Otherwise the operator will get stuck in "ImagePullBackOff" state:
@@ -18,7 +18,7 @@ If you work from a fork and made modifications since the tag was issued, you mus
 export VERSION=<tag>
 
 # For instance:
-export VERSION=2.7.2
+export VERSION=1.0.0
 ```
 
 Once you have a running Kubernetes cluster, you can deploy AWX Operator into your cluster using [Kustomize](https://kubectl.docs.kubernetes.io/guides/introduction/kustomize/). Since kubectl version 1.14 kustomize functionality is built-in (otherwise, follow the instructions here to install the latest version of Kustomize: <https://kubectl.docs.kubernetes.io/installation/kustomize/>)
@@ -38,7 +38,7 @@ make deploy
 If you have a custom operator image you have built, you can specify it with:
 
 ```sh
-IMG=quay.io/$YOURNAMESPACE/awx-operator:$YOURTAG make deploy
+IMG=ghcr.io/$YOURNAMESPACE/belfry-operator:$YOURTAG make deploy
 ```
 
 Otherwise, you can manually create a file called `kustomization.yaml` with the following content:
@@ -47,12 +47,12 @@ Otherwise, you can manually create a file called `kustomization.yaml` with the f
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  # Find the latest tag here: https://github.com/ansible/awx-operator/releases
-  - github.com/ansible/awx-operator/config/default?ref=<tag>
+  # Find the latest tag here: https://github.com/belfry-project/belfry-operator/releases
+  - github.com/belfry-project/belfry-operator/config/default?ref=<tag>
 
 # Set the image tags to match the git version from above
 images:
-  - name: quay.io/ansible/awx-operator
+  - name: ghcr.io/belfry-project/belfry-operator
     newTag: <tag>
 
 # Specify a custom namespace in which to install AWX
@@ -133,7 +133,7 @@ Make sure to add this new file to the list of `resources` in your `kustomization
 ```yaml
 ...
 resources:
-  - github.com/ansible/awx-operator/config/default?ref=<tag>
+  - github.com/belfry-project/belfry-operator/config/default?ref=<tag>
   # Add this extra line:
   - awx-demo.yml
 ...

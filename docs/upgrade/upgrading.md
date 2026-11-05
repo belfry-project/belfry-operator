@@ -4,16 +4,16 @@ To upgrade AWX, it is recommended to upgrade the awx-operator to the version tha
 
 ```shell
 AWX_OPERATOR_VERSION=2.8.0
-docker run --entrypoint="" quay.io/ansible/awx-operator:$AWX_OPERATOR_VERSION bash -c "env | grep DEFAULT_AWX_VERSION"
+docker run --entrypoint="" ghcr.io/belfry-project/belfry-operator:$AWX_OPERATOR_VERSION bash -c "env | grep DEFAULT_AWX_VERSION"
 ```
 
 Make sure you have a backup before upgrading, then upgrade operator by invoking `make deploy` on the desired tag or by applying the `kustomization.yaml` that contains desired version of the operator, and in turn also upgrade your AWX deployment.
 
 ## Backup
 
-The first part of any upgrade should be a backup. Note, there are secrets in the pod which work in conjunction with the database. Having just a database backup without the required secrets will not be sufficient for recovering from an issue when upgrading to a new version. See the [backup role documentation](https://github.com/ansible/awx-operator/tree/devel/roles/backup) for information on how to backup your database and secrets.
+The first part of any upgrade should be a backup. Note, there are secrets in the pod which work in conjunction with the database. Having just a database backup without the required secrets will not be sufficient for recovering from an issue when upgrading to a new version. See the [backup role documentation](https://github.com/belfry-project/belfry-operator/tree/main/roles/backup) for information on how to backup your database and secrets.
 
-In the event you need to recover the backup see the [restore role documentation](https://github.com/ansible/awx-operator/tree/devel/roles/restore). _Before Restoring from a backup_, be sure to:
+In the event you need to recover the backup see the [restore role documentation](https://github.com/belfry-project/belfry-operator/tree/main/roles/restore). _Before Restoring from a backup_, be sure to:
 
 - delete the old existing AWX CR
 - delete the persistent volume claim (PVC) for the database from the old deployment, which has a name like `postgres-15-<deployment-name>-postgres-15-0`
