@@ -1,4 +1,6 @@
-FROM quay.io/operator-framework/ansible-operator:v1.42.3
+# quay.io/operator-framework/ansible-operator rebuilt with current Go, Go modules,
+# UBI and Python packages: https://github.com/belfry-project/image-mirror
+FROM ghcr.io/belfry-project/ansible-operator:pr-2@sha256:3a23fdcde951117d95b623b4b2f27abce86d3e6cfa35ce8c6491fc135b14fb91
 
 USER root
 RUN microdnf update -y && \
