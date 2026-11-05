@@ -13,6 +13,14 @@ ARG OPERATOR_VERSION
 ENV DEFAULT_AWX_VERSION=${DEFAULT_AWX_VERSION}
 ENV OPERATOR_VERSION=${OPERATOR_VERSION}
 
+# Replace the labels inherited from the base image; the build adds
+# org.opencontainers.image.source and .revision for this repository.
+LABEL org.opencontainers.image.title="belfry-operator" \
+      org.opencontainers.image.description="Kubernetes operator that deploys and manages Belfry" \
+      org.opencontainers.image.version="${OPERATOR_VERSION}" \
+      org.opencontainers.image.revision="" \
+      org.opencontainers.image.created=""
+
 COPY requirements.yml ${HOME}/requirements.yml
 RUN ansible-galaxy collection install -r ${HOME}/requirements.yml \
  && chmod -R ug+rwx ${HOME}/.ansible

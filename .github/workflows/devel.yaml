@@ -38,7 +38,7 @@ jobs:
 
       - name: Build and push image to ghcr.io
         run: |
-          BUILD_ARGS="--label org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+          BUILD_ARGS="--label org.opencontainers.image.source=https://github.com/${{ github.repository }} --label org.opencontainers.image.revision=${{ github.sha }}" \
           PLATFORMS=${{ matrix.platform }} \
           IMG=${IMAGE}:${{ github.sha }}-${{ matrix.suffix }} make docker-buildx
           # make docker-buildx ignores build errors, so check that the image exists
