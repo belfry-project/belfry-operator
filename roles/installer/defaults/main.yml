@@ -291,7 +291,7 @@ init_container_extra_volume_mounts: ''
 
 ee_images:
   - name: "AWX EE (latest)"
-    image: "ghcr.io/belfry-project/belfry-ee:latest"
+    image: "ghcr.io/belfry-project/belfry-ee:main"
   - name: "AWX EE ({{ _image_version }})"
     image: "ghcr.io/belfry-project/belfry-ee:{{ _image_version }}"
 
