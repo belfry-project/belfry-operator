@@ -3,8 +3,10 @@
 # Upgrade Posgres (Managed Databases only)
 #  * If postgres version is not supported_pg_version, and not an external postgres instance (when managed_database is yes),
 #    then run this playbook with include_tasks from database_configuration.yml
-#  * Data will be streamed via a pg_dump from the postgres 12/13 pod to the postgres supported_pg_version
-#    pod via a pg_restore.
+#  * Data will be streamed via a pg_dump from the old postgres pod (12, 13 or 15) to the postgres
+#    supported_pg_version pod via a pg_restore.
+#  * The old StatefulSet, Service and NetworkPolicy are removed afterwards; the PVC of the old
+#    database is kept, so the data can still be recovered. Users delete it when they are done.
 
 
 - name: Scale down Deployment for migration
@@ -132,18 +134,23 @@
   set_fact:
     upgraded_postgres_version: '{{ supported_pg_version }}'
 
-# Cleanup old PostgreSQL resources
+# Cleanup old PostgreSQL resources (the PVCs stay)
+- name: Set the names of old PostgreSQL resources
+  set_fact:
+    _old_postgres_names:
+      - "{{ ansible_operator_meta.name }}-postgres"
+      - "{{ ansible_operator_meta.name }}-postgres-13"
+      - "{{ ansible_operator_meta.name }}-postgres-15"
+
 - name: Remove old PostgreSQL StatefulSet
   k8s:
     kind: StatefulSet
-    api_version: v1
+    api_version: apps/v1
     namespace: "{{ ansible_operator_meta.namespace }}"
     name: "{{ item }}"
     state: absent
     wait: true
-  loop:
-    - "{{ ansible_operator_meta.name }}-postgres"
-    - "{{ ansible_operator_meta.name }}-postgres-13"
+  loop: "{{ _old_postgres_names }}"
 
 - name: Remove old PostgreSQL Service
   k8s:
@@ -152,6 +159,13 @@
     namespace: "{{ ansible_operator_meta.namespace }}"
     name: "{{ item }}"
     state: absent
-  loop:
-    - "{{ ansible_operator_meta.name }}-postgres"
-    - "{{ ansible_operator_meta.name }}-postgres-13"
+  loop: "{{ _old_postgres_names }}"
+
+- name: Remove old PostgreSQL NetworkPolicy
+  k8s:
+    kind: NetworkPolicy
+    api_version: networking.k8s.io/v1
+    namespace: "{{ ansible_operator_meta.namespace }}"
+    name: "{{ item }}"
+    state: absent
+  loop: "{{ _old_postgres_names }}"

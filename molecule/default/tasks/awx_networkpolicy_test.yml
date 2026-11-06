@@ -60,7 +60,7 @@
         namespace: '{{ namespace }}'
         api_version: networking.k8s.io/v1
         kind: NetworkPolicy
-        name: example-awx-postgres-15
+        name: example-awx-postgres-18
       register: np_postgres
 
     - name: Assert postgres NetworkPolicy exists (managed database)

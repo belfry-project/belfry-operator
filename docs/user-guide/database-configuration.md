@@ -2,7 +2,9 @@
 
 ## PostgreSQL Version
 
-The default PostgreSQL version for the version of AWX bundled with the latest version of the awx-operator is PostgreSQL 15. You can find this default for a given version by at the default value for [supported_pg_version](https://github.com/ansible/awx-operator/blob/ffba1b4712a0b03f1faedfa70e3a9ef0d443e4a6/roles/installer/vars/main.yml#L7).
+The default PostgreSQL version of belfry-operator is PostgreSQL 18 (the `quay.io/sclorg/postgresql-18-c10s` image). belfry-operator 1.0.0 and awx-operator 2.15.0 to 2.19.1 used PostgreSQL 15. You can find the default of a given version in the value of [supported_pg_version](https://github.com/belfry-project/belfry-operator/blob/main/roles/installer/vars/main.yml).
+
+When the operator finds a managed database of an older PostgreSQL version (12, 13 or 15), it migrates the data: it scales down AWX, creates a new `<deployment-name>-postgres-18` StatefulSet with a new PVC, streams the data with `pg_dump` and `pg_restore`, and then removes the old StatefulSet, Service and NetworkPolicy. See [Upgrading the managed PostgreSQL database](../upgrade/upgrading.md#upgrading-the-managed-postgresql-database). External databases (a `postgres_configuration_secret` of type `unmanaged`) are never touched.
 
 We only have coverage for the default version of PostgreSQL. Newer versions of PostgreSQL will likely work, but should only be configured as an external database. If your database is managed by the awx-operator (default if you don't specify a `postgres_configuration_secret`), then you should not override the default version as this may cause issues when awx-operator tries to upgrade your postgresql pod.
 
@@ -63,7 +65,7 @@ The following variables are customizable for the managed PostgreSQL service
 
 | Name                                          | Description                                                     | Default                                 |
 | --------------------------------------------- | --------------------------------------------------------------- | --------------------------------------- |
-| postgres_image                                | Path of the image to pull                                       | quay.io/sclorg/postgresql-15-c9s        |
+| postgres_image                                | Path of the image to pull                                       | quay.io/sclorg/postgresql-18-c10s       |
 | postgres_image_version                        | Image version to pull                                           | latest                                  |
 | postgres_resource_requirements                | PostgreSQL container (and initContainer) resource requirements  | requests: {cpu: 10m, memory: 64Mi}      |
 | postgres_storage_requirements                 | PostgreSQL container storage requirements                       | requests: {storage: 8Gi}                |
@@ -164,11 +166,13 @@ SELECT name, setting FROM pg_settings;
 
 ## Note about overriding the postgres image
 
-We recommend you use the default image sclorg image. If you are coming from a deployment using the old postgres image from dockerhub (postgres:13), upgrading from awx-operator version 2.12.2 and below to 2.15.0+ will handle migrating your data to the new postgresql image (postgresql-15-c9s).
+We recommend you use the default sclorg image. If you are coming from a deployment using the old postgres image from dockerhub (postgres:13) or the PostgreSQL 15 sclorg image (postgresql-15-c9s), the operator migrates your data to the new PostgreSQL image (postgresql-18-c10s).
 
-You can no longer configure a custom `postgres_data_path` because it is hardcoded in the quay.io/sclorg/postgresql-15-c9s image.
+If you set `postgres_image` or `postgres_image_version` in your AWX spec, the operator uses that image for the new `-postgres-18` StatefulSet. Remove these fields (or point them to a PostgreSQL 18 image with the same conventions) before you upgrade the operator; a PostgreSQL 15 image there would be migrated into a PostgreSQL 15 database that the operator treats as 18.
 
-If you override the postgres image to use a custom postgres image like postgres:15 for example, the default data directory path may be different. These images cannot be used interchangeably.
+You can no longer configure a custom `postgres_data_path` because it is hardcoded in the quay.io/sclorg/postgresql-18-c10s image.
+
+If you override the postgres image to use a custom postgres image like postgres:18 for example, the default data directory path may be different. These images cannot be used interchangeably.
 
 ## Initialize Postgres data volume
 
