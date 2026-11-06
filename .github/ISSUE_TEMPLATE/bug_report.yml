@@ -7,7 +7,9 @@ body:
       value: |
         Bug Report issues are for **concrete, actionable bugs** only.
         For questions and help with installing, migrating from AWX or upgrading, see the [Belfry documentation](https://belfry-project.github.io/docs/).
-        Never report a security vulnerability in a public issue: report it privately as described in [SECURITY.md](https://github.com/belfry-project/.github/blob/main/SECURITY.md), through [a private security advisory](https://github.com/belfry-project/belfry-operator/security/advisories/new).
+        Never report a security vulnerability in a public issue: report it privately as described in
+        [SECURITY.md](https://github.com/belfry-project/.github/blob/main/SECURITY.md), through
+        [a private security advisory](https://github.com/belfry-project/belfry-operator/security/advisories/new).
 
   - type: checkboxes
     id: terms
