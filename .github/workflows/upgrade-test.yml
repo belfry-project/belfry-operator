@@ -235,8 +235,10 @@ jobs:
       - name: Show the cluster state on failure
         if: failure()
         run: |
-          for restore in $(kubectl -n awx get awxrestore -o jsonpath='{range .items[?(@.status.restoreComplete!=true)]}{.metadata.name}{" "}{end}'); do
-            tests/upgrade/debug-restore.sh "$restore" || true
+          for restore in $(kubectl -n awx get awxrestore -o name); do
+            if [ "$(kubectl -n awx get "$restore" -o jsonpath='{.status.restoreComplete}')" != true ]; then
+              tests/upgrade/debug-restore.sh "${restore#*/}" || true
+            fi
           done
           set -x
           kubectl -n awx get awx,awxbackup,awxrestore,deployments,statefulsets,pods,jobs,pvc -o wide || true
