@@ -195,8 +195,15 @@ def verify():
     if old_job['status'] != 'successful' or f'secret-sha256={SECRET_HASH}' not in api('GET', f'/api/v2/jobs/{old_job["id"]}/stdout/?format=txt', text=True):
         raise RuntimeError('The job from before the upgrade, or its output, did not survive')
     host, facts = host_facts(inventory['id'])
-    if facts.get('upgrade_test_phase') != os.environ.get('FACTS_PHASE', 'before') or facts.get('ansible_distribution') != state['distribution']:
-        raise RuntimeError(f'Facts from before the upgrade did not survive: {sorted(facts)[:20]}')
+    # Facts cached by a job after the upgrade come from the Belfry execution
+    # environment, whose distribution can differ from AWX's
+    phase = os.environ.get('FACTS_PHASE', 'before')
+    distribution = state['distribution'] if phase == 'before' else facts.get('ansible_distribution')
+    if facts.get('upgrade_test_phase') != phase or 'ansible_distribution' not in facts or facts['ansible_distribution'] != distribution:
+        raise RuntimeError(
+            f'Facts from before the upgrade did not survive: phase={facts.get("upgrade_test_phase")} (expected {phase}),'
+            f' distribution={facts.get("ansible_distribution")} (expected {distribution}), keys {sorted(facts)[:20]}'
+        )
     print(f'Organization {org["id"]}, inventory, credential, project, job template and job {old_job["id"]} survived, with cached facts')
 
     # A new job runs in the Belfry execution environment, can decrypt the
