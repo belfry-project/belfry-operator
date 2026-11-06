@@ -289,9 +289,13 @@ init_container_extra_commands: ''
 #     mountPath: /shared
 init_container_extra_volume_mounts: ''
 
+# Both execution environments use the belfry-ee build that belongs to the
+# Belfry version: belfry-ee:<version> for a release, belfry-ee:main for a build
+# of main (DEFAULT_AWX_VERSION=main). "AWX EE (latest)" keeps its upstream name
+# so job templates that use it keep working; it only changes with an upgrade.
 ee_images:
   - name: "AWX EE (latest)"
-    image: "ghcr.io/belfry-project/belfry-ee:latest"
+    image: "ghcr.io/belfry-project/belfry-ee:{{ _image_version }}"
   - name: "AWX EE ({{ _image_version }})"
     image: "ghcr.io/belfry-project/belfry-ee:{{ _image_version }}"
 

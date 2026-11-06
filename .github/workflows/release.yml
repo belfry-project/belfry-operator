@@ -1,0 +1,294 @@
+---
+
+name: Release
+
+# Runs when a GitHub release is published (tag X.Y.Z or X.Y.Z-rc.N, no "v").
+# Release belfry-ee and belfry with the same tag first: the operator deploys
+# ghcr.io/belfry-project/belfry:<version> and belfry-ee:<version> by default.
+#
+# - builds the operator for linux/amd64 and linux/arm64 on native runners with
+#   DEFAULT_AWX_VERSION and OPERATOR_VERSION set to the version;
+# - publishes ghcr.io/belfry-project/belfry-operator:<version> (and :latest for
+#   final releases) with provenance and SBOM attestations and a Trivy scan;
+# - runs molecule and the AWX 24.6.1 upgrade test against the release images;
+# - attaches the rendered install manifest belfry-operator.yaml to the release.
+#
+# Run it manually with dry_run (the default) to do all of this from the
+# selected branch with the :release-test images of belfry, belfry-ee and the
+# operator (run the dry runs of belfry-ee and belfry first), publishing only
+# :release-test and keeping the manifest as a workflow artifact.
+#
+# The procedure for a whole Belfry release is in RELEASING.md in
+# belfry-project/.github.
+
+on:
+  release:
+    types: [published]
+  push:
+    branches: [release-workflow-v2]  # TEMPORARY for testing, remove before merging
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (X.Y.Z or X.Y.Z-rc.N). Without dry run, the release with this tag must exist.'
+        required: true
+        default: '0.0.0-rc.0'
+      dry_run:
+        description: 'Dry run: use and publish only :release-test images and no release assets'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.version || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    if: github.repository == 'belfry-project/belfry-operator'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      ref: ${{ steps.version.outputs.ref }}
+      dry_run: ${{ steps.version.outputs.dry_run }}
+      image_tag: ${{ steps.version.outputs.image_tag }}
+      awx_version: ${{ steps.version.outputs.awx_version }}
+    steps:
+      - name: Determine the version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "${EVENT}" = "release" ]; then
+            version="${RELEASE_TAG}"
+            dry_run=false
+            prerelease="${RELEASE_PRERELEASE}"
+          else
+            # Manual run (or a push, while testing a branch): a dry run unless asked otherwise
+            version="${INPUT_VERSION:-0.0.0-rc.0}"
+            dry_run="${INPUT_DRY_RUN:-true}"
+            if [ "${dry_run}" != "true" ]; then
+              prerelease=$(gh release view "${version}" --json isPrerelease --jq .isPrerelease)
+            fi
+          fi
+          if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Release tags are X.Y.Z or X.Y.Z-rc.N (no v prefix), got: ${version}"
+            exit 1
+          fi
+          if [ "${dry_run}" = "true" ]; then
+            ref="${GITHUB_SHA}"
+            image_tag=release-test
+          else
+            ref="refs/tags/${version}"
+            image_tag="${version}"
+            # Release candidates are pre-releases, final releases are not
+            if [[ "${version}" == *-rc.* ]] && [ "${prerelease}" != "true" ]; then
+              echo "::error::${version} is a release candidate; mark the GitHub release as a pre-release"
+              exit 1
+            fi
+            if [[ "${version}" != *-rc.* ]] && [ "${prerelease}" = "true" ]; then
+              echo "::error::${version} is a final release; it must not be a pre-release"
+              exit 1
+            fi
+          fi
+          {
+            echo "version=${version}"
+            echo "ref=${ref}"
+            echo "dry_run=${dry_run}"
+            echo "image_tag=${image_tag}"
+            # The belfry and belfry-ee tag the operator deploys by default
+            echo "awx_version=${image_tag}"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check that belfry and belfry-ee are published with this tag
+        env:
+          TAG: ${{ steps.version.outputs.image_tag }}
+        run: |
+          for image in belfry belfry-ee; do
+            if ! docker buildx imagetools inspect "ghcr.io/belfry-project/${image}:${TAG}" > /dev/null; then
+              echo "::error::ghcr.io/belfry-project/${image}:${TAG} does not exist; release ${image} first"
+              exit 1
+            fi
+            echo "Found ghcr.io/belfry-project/${image}:${TAG}"
+          done
+
+  build:
+    needs: setup
+    name: Build ${{ matrix.arch.platform }}
+    runs-on: ${{ matrix.arch.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - {platform: linux/amd64, runner: ubuntu-latest, suffix: amd64}
+          - {platform: linux/arm64, runner: ubuntu-24.04-arm, suffix: arm64}
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/belfry-operator
+      VERSION: ${{ needs.setup.outputs.version }}
+      AWX_VERSION: ${{ needs.setup.outputs.awx_version }}
+      TAG: ${{ needs.setup.outputs.image_tag }}-${{ matrix.arch.suffix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.setup.outputs.ref }}
+          show-progress: false
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        run: |
+          BUILD_ARGS="--build-arg DEFAULT_AWX_VERSION=${AWX_VERSION} \
+            --build-arg OPERATOR_VERSION=${VERSION} \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label org.opencontainers.image.revision=$(git rev-parse HEAD) \
+            --label org.opencontainers.image.version=${VERSION}" \
+          PLATFORMS=${{ matrix.arch.platform }} \
+          IMG="${IMAGE}:${TAG}" \
+          make docker-buildx
+
+      # make docker-buildx ignores build errors, so this also checks that the image exists
+      - name: Check the versions in the image
+        run: |
+          env=$(docker run --rm --pull always --entrypoint env "${IMAGE}:${TAG}")
+          echo "${env}" | grep -E '^(DEFAULT_AWX_VERSION|OPERATOR_VERSION)='
+          if ! echo "${env}" | grep -qx "DEFAULT_AWX_VERSION=${AWX_VERSION}" \
+            || ! echo "${env}" | grep -qx "OPERATOR_VERSION=${VERSION}"; then
+            echo "::error::Expected DEFAULT_AWX_VERSION=${AWX_VERSION} and OPERATOR_VERSION=${VERSION}"
+            exit 1
+          fi
+
+  publish:
+    needs: [setup, build]
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    uses: belfry-project/.github/.github/workflows/release-image.yml@main
+    with:
+      image: ghcr.io/belfry-project/belfry-operator
+      version: ${{ needs.setup.outputs.version }}
+      dry_run: ${{ needs.setup.outputs.dry_run == 'true' }}
+      sources: >-
+        ghcr.io/belfry-project/belfry-operator:${{ needs.setup.outputs.image_tag }}-amd64
+        ghcr.io/belfry-project/belfry-operator:${{ needs.setup.outputs.image_tag }}-arm64
+
+  # Deploys Belfry with the operator built from the release tag with the same
+  # DEFAULT_AWX_VERSION, and checks that it runs belfry:<version> and
+  # belfry-ee:<version> (molecule builds the operator itself).
+  molecule:
+    needs: [setup, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    name: molecule ${{ matrix.ansible_args }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ansible_args:
+          - --skip-tags=replicas
+          - -t replicas
+    env:
+      DOCKER_API_VERSION: "1.44"
+      DEBUG_OUTPUT_DIR: /tmp/awx_operator_molecule_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.setup.outputs.ref }}
+          show-progress: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r molecule/requirements.txt
+          ansible-galaxy collection install -r molecule/requirements.yml
+
+      - name: Run molecule
+        env:
+          MOLECULE_VERBOSITY: 3
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+          STORE_DEBUG_OUTPUT: true
+          DEFAULT_AWX_TEST_VERSION: ${{ needs.setup.outputs.awx_version }}
+        run: |
+          sudo rm -f $(which kustomize)
+          make kustomize
+          KUSTOMIZE_PATH=$(readlink -f bin/kustomize) molecule test -s kind -- ${{ matrix.ansible_args }}
+
+      - name: Upload the debug output if molecule fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: molecule-${{ strategy.job-index }}
+          path: ${{ env.DEBUG_OUTPUT_DIR }}
+
+  # Upgrades AWX 24.6.1 (awx-operator 2.19.1) to this release with the
+  # published operator image, and restores a 24.6.1 backup into it.
+  upgrade-test:
+    needs: [setup, publish]
+    uses: ./.github/workflows/upgrade-test.yml
+    with:
+      ref: ${{ needs.setup.outputs.ref }}
+      operator_image: ghcr.io/belfry-project/belfry-operator:${{ needs.setup.outputs.image_tag }}
+      awx_version: ${{ needs.setup.outputs.awx_version }}
+
+  manifests:
+    needs: [setup, publish, molecule, upgrade-test]
+    name: Install manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.setup.outputs.version }}
+      IMAGE: ghcr.io/belfry-project/belfry-operator:${{ needs.setup.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.setup.outputs.ref }}
+          show-progress: false
+
+      # One file with the CRDs, RBAC and the operator deployment in namespace
+      # awx, with the image pinned to the release:
+      #   kubectl apply --server-side -f https://github.com/belfry-project/belfry-operator/releases/download/<version>/belfry-operator.yaml
+      - name: Render the install manifest
+        run: |
+          make kustomize
+          (cd config/manager && ../../bin/kustomize edit set image "controller=${IMAGE}")
+          bin/kustomize build config/default > belfry-operator.yaml
+          grep -n "image: ghcr.io/belfry-project/belfry-operator" belfry-operator.yaml
+          sha256sum belfry-operator.yaml | tee belfry-operator.yaml.sha256
+
+      - name: Keep the manifest as a workflow artifact (dry run)
+        if: needs.setup.outputs.dry_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: belfry-operator-manifest
+          path: belfry-operator.yaml*
+
+      - name: Attach the manifest to the GitHub release
+        if: needs.setup.outputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release upload "${VERSION}" --clobber belfry-operator.yaml belfry-operator.yaml.sha256
