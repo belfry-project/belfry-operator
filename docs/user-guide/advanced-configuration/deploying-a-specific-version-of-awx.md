@@ -17,7 +17,7 @@ There are variables that are customizable for awx the image management.
 | control_plane_ee_image        | Image version to pull         | ghcr.io/belfry-project/belfry-ee:DEFAULT_AWX_VERSION |
 | init_container_image          | Path of the image to pull     | ghcr.io/belfry-project/belfry-ee           |
 | init_container_image_version  | Image version to pull         | value of DEFAULT_AWX_VERSION or latest     |
-| init_projects_container_image | Image version to pull         | quay.io/centos/centos:stream9              |
+| init_projects_container_image | Image version to pull         | quay.io/almalinuxorg/almalinux:10-minimal  |
 
 Example of customization could be:
 
@@ -36,7 +36,7 @@ spec:
   control_plane_ee_image: myorg/my-custom-awx-ee:latest
   init_container_image: myorg/my-custom-awx-ee
   init_container_image_version: latest
-  init_projects_container_image: myorg/my-mirrored-centos:stream9
+  init_projects_container_image: myorg/my-mirrored-almalinux:10-minimal
 ```
 
 !!! warning
