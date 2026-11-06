@@ -16,9 +16,32 @@ The first part of any upgrade should be a backup. Note, there are secrets in the
 In the event you need to recover the backup see the [restore role documentation](https://github.com/belfry-project/belfry-operator/tree/main/roles/restore). _Before Restoring from a backup_, be sure to:
 
 - delete the old existing AWX CR
-- delete the persistent volume claim (PVC) for the database from the old deployment, which has a name like `postgres-15-<deployment-name>-postgres-15-0`
+- delete the persistent volume claim (PVC) for the database from the old deployment, which has a name like `postgres-18-<deployment-name>-postgres-18-0` (`postgres-15-<deployment-name>-postgres-15-0` before the move to PostgreSQL 18)
 
 **Note**: Do not delete the namespace/project, as that will delete the backup and the backup's PVC as well.
+
+## Upgrading the managed PostgreSQL database
+
+belfry-operator 1.0.0, like awx-operator 2.15.0 to 2.19.1, runs the managed database on PostgreSQL 15 (`quay.io/sclorg/postgresql-15-c9s`). Later versions of belfry-operator run it on PostgreSQL 18 (`quay.io/sclorg/postgresql-18-c10s`): PostgreSQL 15 is supported until November 2027, PostgreSQL 18 until November 2030.
+
+When you upgrade the operator, it migrates a managed PostgreSQL 15 (or older) database once, during the first reconciliation of each AWX instance:
+
+1. It scales down the web and task deployments, so AWX is unavailable during the migration.
+2. It creates the StatefulSet `<deployment-name>-postgres-18`, with a new PVC `postgres-18-<deployment-name>-postgres-18-0` of the same size (`postgres_storage_requirements`) and storage class as configured in the AWX spec.
+3. It streams the data from the old database into the new one with `pg_dump` and `pg_restore`, and points the `<deployment-name>-postgres-configuration` secret to the new database.
+4. It removes the old StatefulSet, Service and NetworkPolicy (`<deployment-name>-postgres-15`), sets `status.upgradedPostgresVersion` to `18` and starts AWX again.
+
+What you need to do:
+
+- Make a backup (see above) before upgrading the operator.
+- Make sure the cluster can provision a second database volume: the old PVC stays until you delete it, so both need room during and after the migration.
+- If your AWX spec sets `postgres_image` or `postgres_image_version`, remove them (or point them to a PostgreSQL 18 image) before the upgrade.
+- Plan for downtime: the migration takes about as long as a `pg_dump` and restore of your database.
+- After checking that AWX works, delete the old PVC: `kubectl -n <namespace> delete pvc postgres-15-<deployment-name>-postgres-15-0`. Until then you can still go back to the old database.
+
+External databases (a `postgres_configuration_secret` of type `unmanaged`) are not touched; you upgrade them yourself when you want to. Belfry needs at least PostgreSQL 12, and CI tests the version the operator deploys (18).
+
+Backups made from a PostgreSQL 15 database, including backups made with awx-operator, can be restored with an AWXRestore: the operator restores them into a new PostgreSQL 18 database.
 
 ## Caveats for upgrading to v0.14.0
 
