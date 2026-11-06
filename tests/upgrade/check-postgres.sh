@@ -14,6 +14,9 @@ if [ "${server%%.*}" != "$version" ]; then
   echo "Expected PostgreSQL $version in $statefulset-0" >&2
   exit 1
 fi
+# The operator sets the status fields one after the other at the end of a
+# reconciliation
+"$(dirname "$0")/wait-for-status.sh" awx "$instance" postgresConfigurationSecret > /dev/null
 secret="$(kubectl -n awx get awx "$instance" -o jsonpath='{.status.postgresConfigurationSecret}')"
 host="$(kubectl -n awx get secret "$secret" -o jsonpath='{.data.host}' | base64 -d)"
 echo "Secret $secret points to $host"
