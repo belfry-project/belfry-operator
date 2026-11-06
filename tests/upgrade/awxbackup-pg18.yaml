@@ -1,0 +1,10 @@
+# Backup of the upgraded instance, made by belfry-operator from its
+# PostgreSQL 18 database. It goes to the same PVC (awx-backup-claim) as the
+# AWX 24.6.1 backup, in its own directory.
+apiVersion: awx.ansible.com/v1beta1
+kind: AWXBackup
+metadata:
+  name: awx-backup-pg18
+  namespace: awx
+spec:
+  deployment_name: awx
