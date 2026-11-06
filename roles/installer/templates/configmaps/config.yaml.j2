@@ -337,7 +337,9 @@ data:
     harakiri = {{ uwsgi_timeout }}
     harakiri-graceful-timeout = {{ uwsgi_timeout_grace_period }}
     harakiri-graceful-signal = 6
-    py-call-osafterfork = true
+    # py-call-osafterfork would let Python catch the graceful harakiri signal, but
+    # makes uWSGI workers abort at start on Python 3.13 and newer (unbit/uwsgi#2710).
+    # Without it, harakiri still stops the worker; only its debug log is lost.
     
     if-env = UWSGI_MOUNT_PATH
     mount = %(_)=awx.wsgi:application
