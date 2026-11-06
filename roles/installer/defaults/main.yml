@@ -304,7 +304,7 @@ _control_plane_ee_image: "ghcr.io/belfry-project/belfry-ee:{{ _image_version }}"
 _init_container_image: "{{ _control_plane_ee_image.split(':')[0] }}"
 _init_container_image_version: "{{ _control_plane_ee_image.split(':')[1] }}"
 
-_init_projects_container_image: quay.io/centos/centos:stream9
+_init_projects_container_image: quay.io/almalinuxorg/almalinux:10-minimal
 
 create_preload_data: true
 
