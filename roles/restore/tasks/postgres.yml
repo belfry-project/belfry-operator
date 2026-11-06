@@ -136,7 +136,7 @@
       echo keepalive_pid: $keepalive_pid
       set -e -o pipefail
       {{ pg_drop_create }}
-      cat {{ backup_dir }}/tower.db | PGPASSWORD='{{ awx_postgres_pass }}' {{ pg_restore }}
+      PGPASSWORD='{{ awx_postgres_pass }}' {{ pg_restore }} {{ backup_dir }}/tower.db
       PG_RC=$?
       set +e +o pipefail
       exit $PG_RC
