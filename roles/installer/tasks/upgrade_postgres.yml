@@ -32,6 +32,32 @@
     awx_postgres_host: "{{ ansible_operator_meta.name }}-postgres-{{ supported_pg_version }}"
   no_log: "{{ no_log }}"
 
+# The StatefulSet carries a checksum of this secret. Without the new secret
+# here, the next reconciliation would see a changed StatefulSet, restart the
+# new database and scale down the deployments once more.
+- name: Read the new database configuration secret
+  k8s_info:
+    kind: Secret
+    namespace: "{{ ansible_operator_meta.namespace }}"
+    name: "{{ ansible_operator_meta.name }}-postgres-configuration"
+  register: _upgraded_pg_config
+  no_log: "{{ no_log }}"
+
+- name: Use the new database configuration secret
+  set_fact:
+    pg_config: "{{ _upgraded_pg_config }}"
+  no_log: "{{ no_log }}"
+
+# The new pod streams the data from the old one, so it needs its own
+# NetworkPolicy (egress to the old database) before it starts. The default
+# deny policy of belfry-operator 1.0.0 would block it otherwise;
+# networkpolicy.yml applies the same policy again later.
+- name: Apply the NetworkPolicy of the new PostgreSQL pod
+  k8s:
+    state: present
+    apply: true
+    definition: "{{ lookup('template', 'networking/postgres.networkpolicy.yaml.j2') }}"
+
 - name: Create Database if no database is specified
   k8s:
     apply: true
