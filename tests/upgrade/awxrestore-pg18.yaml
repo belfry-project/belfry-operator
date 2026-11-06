@@ -1,0 +1,10 @@
+# Restore of the PostgreSQL 18 backup of the upgraded instance into a new
+# instance, made by belfry-operator.
+apiVersion: awx.ansible.com/v1beta1
+kind: AWXRestore
+metadata:
+  name: awx-restore-pg18
+  namespace: awx
+spec:
+  deployment_name: awx-restored-pg18
+  backup_name: awx-backup-pg18

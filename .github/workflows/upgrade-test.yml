@@ -2,11 +2,16 @@
 
 name: Upgrade from AWX
 
-# Installs AWX 24.6.1 with awx-operator 2.19.1, creates data and backs it up
-# with an AWXBackup. Then switches to belfry-operator on the same AWX resource
-# and checks that the data survived and new jobs work. Finally deletes that
-# instance, restores the 24.6.1 backup into a new instance with an AWXRestore
-# (which migrates the database to Belfry), and checks the same data there.
+# Installs AWX 24.6.1 with awx-operator 2.19.1 (PostgreSQL 15), creates data
+# and backs it up with an AWXBackup. Then switches to belfry-operator on the
+# same AWX resource and checks that the data survived, that the operator
+# migrated the managed database to PostgreSQL 18 and that new jobs work. The
+# "belfry-operator-1.0.0" variant first upgrades to belfry-operator 1.0.0
+# (still PostgreSQL 15, with NetworkPolicies) and checks the data there.
+# Then backs up the upgraded instance (PostgreSQL 18) and deletes it, restores
+# the 24.6.1 backup into a new instance with an AWXRestore (which migrates the
+# database to Belfry, on PostgreSQL 18), checks the same data there, deletes
+# it, and restores the PostgreSQL 18 backup into a third instance.
 #
 # Inputs (workflow_dispatch and workflow_call; the schedule and pull requests
 # use the defaults):
@@ -62,17 +67,34 @@ on:
     paths:
       - 'tests/upgrade/**'
       - '.github/workflows/upgrade-test.yml'
+      # The database upgrade, backup and restore
+      - 'roles/installer/tasks/database.yml'
+      - 'roles/installer/tasks/upgrade_postgres.yml'
+      - 'roles/installer/vars/main.yml'
+      - 'roles/backup/**'
+      - 'roles/restore/**'
 
 permissions:
   contents: read
 
 jobs:
   upgrade:
+    name: upgrade (${{ matrix.from }})
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        # What the instance runs before the switch to the tested operator
+        from:
+          - awx-operator-2.19.1
+          - belfry-operator-1.0.0
     env:
       AWX_URL: http://localhost:8080
       RESTORED_URL: http://localhost:8081
+      RESTORED_PG18_URL: http://localhost:8082
+      # PostgreSQL major version of the databases the tested operator manages
+      PG_VERSION: '18'
       OPERATOR_IMAGE: ${{ inputs.operator_image }}
       AWX_VERSION: ${{ inputs.awx_version || 'main' }}
     steps:
@@ -117,6 +139,22 @@ jobs:
           tests/upgrade/wait-for-status.sh awxbackup awx-backup backupDirectory
           kubectl -n awx get awxbackup awx-backup -o jsonpath='{.status}{"\n"}'
 
+      - name: Upgrade to belfry-operator 1.0.0
+        if: matrix.from == 'belfry-operator-1.0.0'
+        run: |
+          git fetch --depth 1 origin tag 1.0.0
+          git worktree add "$RUNNER_TEMP/operator-1.0.0" 1.0.0
+          make -C "$RUNNER_TEMP/operator-1.0.0" deploy IMG=ghcr.io/belfry-project/belfry-operator:1.0.0
+          kubectl -n awx rollout status deployment/awx-operator-controller-manager --timeout=10m
+          tests/upgrade/wait-for-awx.sh ghcr.io/belfry-project/belfry:1.0.0
+          tests/upgrade/check-postgres.sh awx 15
+          kubectl -n awx get networkpolicies
+          tests/upgrade/port-forward.sh awx 8080
+          password="$(tests/upgrade/admin-password.sh awx)"
+          AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$AWX_URL"
+          # verify ran a job that updated the cached facts
+          echo FACTS_PHASE=after >> "$GITHUB_ENV"
+
       - name: Switch to belfry-operator
         run: |
           if [ -z "$OPERATOR_IMAGE" ]; then
@@ -127,6 +165,11 @@ jobs:
           make deploy IMG="$OPERATOR_IMAGE"
           kubectl -n awx rollout status deployment/awx-operator-controller-manager --timeout=10m
           tests/upgrade/wait-for-awx.sh "$BELFRY_IMAGE"
+          # The operator migrated the managed database to the new PostgreSQL
+          # version and removed the old StatefulSet; the old PVC stays
+          tests/upgrade/wait-for-status.sh awx awx upgradedPostgresVersion "$PG_VERSION"
+          tests/upgrade/check-postgres.sh awx "$PG_VERSION"
+          kubectl -n awx get pvc postgres-15-awx-postgres-15-0
 
       - name: Check the data and run jobs in Belfry
         run: |
@@ -135,19 +178,17 @@ jobs:
           password="$(tests/upgrade/admin-password.sh awx)"
           AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$AWX_URL"
 
+      - name: Back up the upgraded instance (PostgreSQL 18) with belfry-operator
+        run: |
+          kubectl apply -f tests/upgrade/awxbackup-pg18.yaml
+          tests/upgrade/wait-for-status.sh awxbackup awx-backup-pg18 backupDirectory
+          kubectl -n awx get awxbackup awx-backup-pg18 -o jsonpath='{.status}{"\n"}'
+
       - name: Delete the upgraded instance
         run: |
           # The restore must work from the backup alone, and the runner has
-          # room for one instance at a time. The operator's finalizer keeps
-          # the instance's secrets (it removes their ownerReferences), and the
-          # PostgreSQL PVC stays too; delete them so the restore recreates the
-          # secrets from the backup. The backup PVC is not touched.
-          kubectl -n awx delete awx awx --wait --timeout=10m
-          kubectl -n awx wait --for=delete deployment/awx-web deployment/awx-task statefulset/awx-postgres-15 --timeout=10m
-          kubectl -n awx delete secret --ignore-not-found awx-admin-password awx-secret-key awx-broadcast-websocket \
-            awx-postgres-configuration awx-receptor-ca awx-receptor-work-signing
-          kubectl -n awx delete pvc --ignore-not-found postgres-15-awx-postgres-15-0 --timeout=5m
-          kubectl -n awx get secrets,pvc
+          # room for one instance at a time
+          tests/upgrade/delete-instance.sh awx
 
       - name: Restore the AWX 24.6.1 backup with belfry-operator
         run: |
@@ -162,13 +203,34 @@ jobs:
           # The operator migrated the restored 24.6.1 database with a Job for the Belfry image
           kubectl -n awx get jobs -o custom-columns=NAME:.metadata.name,SUCCEEDED:.status.succeeded | tee /tmp/jobs.txt
           grep -E '^awx-restored-migration-\S+\s+1$' /tmp/jobs.txt
+          # The PostgreSQL 15 backup was restored into a PostgreSQL 18 database
+          tests/upgrade/check-postgres.sh awx-restored "$PG_VERSION"
 
       - name: Check the data and run jobs in the restored instance
         run: |
           tests/upgrade/port-forward.sh awx-restored 8081
           # A plain assignment fails the step if the password cannot be read
           password="$(tests/upgrade/admin-password.sh awx-restored)"
-          AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$RESTORED_URL"
+          # The 24.6.1 backup was made before any job ran after the upgrade
+          FACTS_PHASE=before AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$RESTORED_URL"
+
+      - name: Restore the PostgreSQL 18 backup with belfry-operator
+        run: |
+          tests/upgrade/delete-instance.sh awx-restored
+          kubectl apply -f tests/upgrade/awxrestore-pg18.yaml
+          tests/upgrade/wait-for-status.sh awxrestore awx-restore-pg18 restoreComplete true
+          tests/upgrade/wait-for-awx.sh "$BELFRY_IMAGE" awx-restored-pg18
+          tests/upgrade/wait-for-status.sh awx awx-restored-pg18 adminPasswordSecret
+          kubectl -n awx get secrets -o custom-columns=NAME:.metadata.name,DATA:.data | tee /tmp/secrets.txt
+          if grep -E '\s<none>$' /tmp/secrets.txt; then echo "Empty secrets after the restore" >&2; exit 1; fi
+          tests/upgrade/check-postgres.sh awx-restored-pg18 "$PG_VERSION"
+
+      - name: Check the data and run jobs in the instance restored from PostgreSQL 18
+        run: |
+          tests/upgrade/port-forward.sh awx-restored-pg18 8082
+          password="$(tests/upgrade/admin-password.sh awx-restored-pg18)"
+          # The backup was made after verify ran a job on the upgraded instance
+          FACTS_PHASE=after AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$RESTORED_PG18_URL"
 
       - name: Show the cluster state on failure
         if: failure()
@@ -183,12 +245,16 @@ jobs:
           # The operator's playbook output, without the proxy's cache messages
           kubectl -n awx logs deployment/awx-operator-controller-manager -c awx-manager \
             | grep -v -e '"logger":"proxy"' | tail -1500 || true
-          for pod in $(kubectl -n awx get pods -o name | grep -E 'db-management|migration'); do
+          for pod in $(kubectl -n awx get pods -o name | grep -E 'db-management|migration|postgres'); do
             kubectl -n awx logs "$pod" --all-containers --tail=200 || true
           done
-          for instance in awx awx-restored; do
+          for instance in awx awx-restored awx-restored-pg18; do
             if kubectl -n awx get deployment "$instance-web" > /dev/null 2>&1; then
-              url="$AWX_URL"; [ "$instance" = awx ] || url="$RESTORED_URL"
+              case "$instance" in
+                awx) url="$AWX_URL" ;;
+                awx-restored) url="$RESTORED_URL" ;;
+                *) url="$RESTORED_PG18_URL" ;;
+              esac
               tests/upgrade/debug-auth.sh "$instance" "$url" || true
             fi
             kubectl -n awx logs "deployment/$instance-web" --all-containers --tail=200 || true

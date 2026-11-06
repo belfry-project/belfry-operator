@@ -7,6 +7,8 @@ Talks to the AWX API at URL, or AWX_URL (default http://localhost:8080), as
 admin with AWX_ADMIN_PASSWORD. seed writes upgrade-state.json, which verify
 reads. verify can run against any instance that has the seeded data: the
 upgraded one, or a new one restored from a backup made after seeding.
+verify runs a job that updates the cached facts; to verify an instance again
+after that (or a backup made after it), set FACTS_PHASE=after.
 
 The data covers what users care about when upgrading: an organization, an
 inventory with a host and cached facts, a credential with a secret, a project,
@@ -193,7 +195,7 @@ def verify():
     if old_job['status'] != 'successful' or f'secret-sha256={SECRET_HASH}' not in api('GET', f'/api/v2/jobs/{old_job["id"]}/stdout/?format=txt', text=True):
         raise RuntimeError('The job from before the upgrade, or its output, did not survive')
     host, facts = host_facts(inventory['id'])
-    if facts.get('upgrade_test_phase') != 'before' or facts.get('ansible_distribution') != state['distribution']:
+    if facts.get('upgrade_test_phase') != os.environ.get('FACTS_PHASE', 'before') or facts.get('ansible_distribution') != state['distribution']:
         raise RuntimeError(f'Facts from before the upgrade did not survive: {sorted(facts)[:20]}')
     print(f'Organization {org["id"]}, inventory, credential, project, job template and job {old_job["id"]} survived, with cached facts')
 
