@@ -3,16 +3,23 @@
 # status. Usage: admin-password.sh [INSTANCE]  (defaults to awx)
 # A restored instance keeps the old instance's secret names (e.g.
 # awx-admin-password), so do not guess <instance>-admin-password.
+# The operator sets status.adminPasswordSecret only after the deployment
+# finished, so wait for it (up to ADMIN_PASSWORD_TIMEOUT seconds, default 600).
 set -euo pipefail
 instance="${1:-awx}"
-secret="$(kubectl -n awx get awx "$instance" -o jsonpath='{.status.adminPasswordSecret}')"
-if [ -z "$secret" ]; then
-  echo "awx/$instance has no status.adminPasswordSecret yet" >&2
-  exit 1
-fi
-password="$(kubectl -n awx get secret "$secret" -o jsonpath='{.data.password}' | base64 -d)"
-if [ -z "$password" ]; then
-  echo "Secret $secret has no password" >&2
-  exit 1
-fi
-printf '%s\n' "$password"
+deadline=$((SECONDS + ${ADMIN_PASSWORD_TIMEOUT:-600}))
+while true; do
+  secret="$(kubectl -n awx get awx "$instance" -o jsonpath='{.status.adminPasswordSecret}' 2>/dev/null || true)"
+  if [ -n "$secret" ]; then
+    password="$(kubectl -n awx get secret "$secret" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true)"
+    if [ -n "$password" ]; then
+      printf '%s\n' "$password"
+      exit 0
+    fi
+  fi
+  if [ $SECONDS -ge $deadline ]; then
+    echo "awx/$instance has no usable admin password after ${ADMIN_PASSWORD_TIMEOUT:-600}s (status.adminPasswordSecret='${secret}')" >&2
+    exit 1
+  fi
+  sleep 10
+done
