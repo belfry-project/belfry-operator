@@ -272,9 +272,11 @@ jobs:
       #   kubectl apply --server-side -f https://github.com/belfry-project/belfry-operator/releases/download/<version>/belfry-operator.yaml
       - name: Render the install manifest
         run: |
+          # make kustomize downloads it to bin/ unless kustomize is installed
           make kustomize
-          (cd config/manager && ../../bin/kustomize edit set image "controller=${IMAGE}")
-          bin/kustomize build config/default > belfry-operator.yaml
+          kustomize=$(command -v kustomize || echo "${PWD}/bin/kustomize")
+          (cd config/manager && "${kustomize}" edit set image "controller=${IMAGE}")
+          "${kustomize}" build config/default > belfry-operator.yaml
           grep -n "image: ghcr.io/belfry-project/belfry-operator" belfry-operator.yaml
           sha256sum belfry-operator.yaml | tee belfry-operator.yaml.sha256
 
