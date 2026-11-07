@@ -134,7 +134,7 @@ spec:
                 type: boolean
                 default: true
               force_drop_db:
-                description: Force drop the database before restoring. USE WITH CAUTION!
+                description: Drop and recreate an external database before restoring. The operator always does this for the database it manages. USE WITH CAUTION!
                 type: boolean
                 default: false
           status:
