@@ -23,7 +23,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.14"
 
       - name: Install Dependencies
         run: |
@@ -32,6 +32,11 @@ jobs:
       - name: Install Collections
         run: |
           ansible-galaxy collection install -r molecule/requirements.yml
+
+      # Molecule 6 and later no longer lint; keep the YAML check here
+      - name: Lint YAML
+        run: |
+          yamllint .
 
       - name: Run Molecule
         env:
