@@ -78,94 +78,100 @@
       -p {{ awx_postgres_port }}
   no_log: "{{ no_log }}"
 
-- name: Grant CREATEDB privilege to database user to recreate the database
-  kubernetes.core.k8s_exec:
-    namespace: "{{ ansible_operator_meta.namespace }}"
-    pod: "{{ postgres_pod_name }}"
-    container: postgres
-    command: >-
-      psql -v ON_ERROR_STOP=1 -c "ALTER USER \"{{ awx_postgres_user }}\" CREATEDB;"
-  when:
-    - restore_recreate_db | bool
-    - awx_postgres_type == 'managed'
-
-- name: Drop and create the database before restoring
+# The database user only has CREATEDB while the database is recreated and
+# restored: the always section also revokes it when the restore fails. The
+# failure still fails the reconcile, and the retry grants it again.
+- name: Restore the database
   block:
-    # IF EXISTS: a restore that failed between the drop and the create can be
-    # retried. FORCE ends the connections that are left.
-    - name: Set drop db command
-      set_fact:
-        pg_drop_db: >-
-          PGPASSWORD='{{ awx_postgres_pass }}' psql -v ON_ERROR_STOP=1
-          -U {{ awx_postgres_user }}
-          -h {{ resolvable_db_host }}
-          -d postgres
-          -p {{ awx_postgres_port }}
-          -c 'DROP DATABASE IF EXISTS \"{{ awx_postgres_database }}\" WITH (FORCE);' ;
+    - name: Grant CREATEDB privilege to database user to recreate the database
+      kubernetes.core.k8s_exec:
+        namespace: "{{ ansible_operator_meta.namespace }}"
+        pod: "{{ postgres_pod_name }}"
+        container: postgres
+        command: >-
+          psql -v ON_ERROR_STOP=1 -c "ALTER USER \"{{ awx_postgres_user }}\" CREATEDB;"
+      when:
+        - restore_recreate_db | bool
+        - awx_postgres_type == 'managed'
+
+    - name: Drop and create the database before restoring
+      block:
+        # IF EXISTS: a restore that failed between the drop and the create can be
+        # retried. FORCE ends the connections that are left.
+        - name: Set drop db command
+          set_fact:
+            pg_drop_db: >-
+              PGPASSWORD='{{ awx_postgres_pass }}' psql -v ON_ERROR_STOP=1
+              -U {{ awx_postgres_user }}
+              -h {{ resolvable_db_host }}
+              -d postgres
+              -p {{ awx_postgres_port }}
+              -c 'DROP DATABASE IF EXISTS \"{{ awx_postgres_database }}\" WITH (FORCE);' ;
+          no_log: "{{ no_log }}"
+
+        - name: Set create db command
+          set_fact:
+            pg_create_db: >-
+              PGPASSWORD='{{ awx_postgres_pass }}' psql -v ON_ERROR_STOP=1
+              -U {{ awx_postgres_user }}
+              -h {{ resolvable_db_host }}
+              -d postgres
+              -p {{ awx_postgres_port }}
+              -c 'CREATE DATABASE \"{{ awx_postgres_database }}\" WITH OWNER = \"{{ awx_postgres_user }}\";' ;
+          no_log: "{{ no_log }}"
+
+        - name: Set complete pg restore command
+          set_fact:
+            pg_drop_create: >-
+              {{ pg_drop_db }}
+              {{ pg_create_db }}
+      when: restore_recreate_db | bool
+
+    - name: Restore Postgres database
+      kubernetes.core.k8s_exec:
+        namespace: "{{ backup_pvc_namespace }}"
+        pod: "{{ ansible_operator_meta.name }}-db-management"
+        container: "{{ ansible_operator_meta.name }}-db-management"
+        command: |
+          bash -c "
+          function end_keepalive {
+            rc=$?
+            rm -f \"$1\"
+            kill $(cat /proc/$2/task/$2/children 2>/dev/null) 2>/dev/null || true
+            wait $2 || true
+            exit $rc
+          }
+          keepalive_file=\"$(mktemp)\"
+          until {{ pg_isready }} &> /dev/null
+          do
+              echo \"Waiting until Postgres is accepting connections...\"
+              sleep 2
+          done
+          while [[ -f \"$keepalive_file\" ]]; do
+            echo 'Migrating data from old database...'
+            sleep 60
+          done &
+          keepalive_pid=$!
+          trap 'end_keepalive \"$keepalive_file\" \"$keepalive_pid\"' EXIT SIGINT SIGTERM
+          echo keepalive_pid: $keepalive_pid
+          set -e -o pipefail
+          {{ pg_drop_create }}
+          PGPASSWORD='{{ awx_postgres_pass }}' {{ pg_restore }} {{ backup_dir }}/tower.db
+          PG_RC=$?
+          set +e +o pipefail
+          exit $PG_RC
+          "
+      register: data_migration
       no_log: "{{ no_log }}"
 
-    - name: Set create db command
-      set_fact:
-        pg_create_db: >-
-          PGPASSWORD='{{ awx_postgres_pass }}' psql -v ON_ERROR_STOP=1
-          -U {{ awx_postgres_user }}
-          -h {{ resolvable_db_host }}
-          -d postgres
-          -p {{ awx_postgres_port }}
-          -c 'CREATE DATABASE \"{{ awx_postgres_database }}\" WITH OWNER = \"{{ awx_postgres_user }}\";' ;
-      no_log: "{{ no_log }}"
-
-    - name: Set complete pg restore command
-      set_fact:
-        pg_drop_create: >-
-          {{ pg_drop_db }}
-          {{ pg_create_db }}
-  when: restore_recreate_db | bool
-
-- name: Restore Postgres database
-  kubernetes.core.k8s_exec:
-    namespace: "{{ backup_pvc_namespace }}"
-    pod: "{{ ansible_operator_meta.name }}-db-management"
-    container: "{{ ansible_operator_meta.name }}-db-management"
-    command: |
-      bash -c "
-      function end_keepalive {
-        rc=$?
-        rm -f \"$1\"
-        kill $(cat /proc/$2/task/$2/children 2>/dev/null) 2>/dev/null || true
-        wait $2 || true
-        exit $rc
-      }
-      keepalive_file=\"$(mktemp)\"
-      until {{ pg_isready }} &> /dev/null
-      do
-          echo \"Waiting until Postgres is accepting connections...\"
-          sleep 2
-      done
-      while [[ -f \"$keepalive_file\" ]]; do
-        echo 'Migrating data from old database...'
-        sleep 60
-      done &
-      keepalive_pid=$!
-      trap 'end_keepalive \"$keepalive_file\" \"$keepalive_pid\"' EXIT SIGINT SIGTERM
-      echo keepalive_pid: $keepalive_pid
-      set -e -o pipefail
-      {{ pg_drop_create }}
-      PGPASSWORD='{{ awx_postgres_pass }}' {{ pg_restore }} {{ backup_dir }}/tower.db
-      PG_RC=$?
-      set +e +o pipefail
-      exit $PG_RC
-      "
-  register: data_migration
-  no_log: "{{ no_log }}"
-
-- name: Revoke CREATEDB privilege from database user
-  kubernetes.core.k8s_exec:
-    namespace: "{{ ansible_operator_meta.namespace }}"
-    pod: "{{ postgres_pod_name }}"
-    container: postgres
-    command: >-
-      psql -v ON_ERROR_STOP=1 -c "ALTER USER \"{{ awx_postgres_user }}\" NOCREATEDB;"
-  when:
-    - restore_recreate_db | bool
-    - awx_postgres_type == 'managed'
+  always:
+    - name: Revoke CREATEDB privilege from database user
+      kubernetes.core.k8s_exec:
+        namespace: "{{ ansible_operator_meta.namespace }}"
+        pod: "{{ postgres_pod_name }}"
+        container: postgres
+        command: >-
+          psql -v ON_ERROR_STOP=1 -c "ALTER USER \"{{ awx_postgres_user }}\" NOCREATEDB;"
+      when:
+        - restore_recreate_db | bool
+        - awx_postgres_type == 'managed'
