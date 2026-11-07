@@ -1,0 +1,11 @@
+# Second restore of the PostgreSQL 18 backup into the instance that the first
+# one created: the database already has AWX's schema, as when a restore that
+# failed halfway is retried (belfry-operator#33).
+apiVersion: awx.ansible.com/v1beta1
+kind: AWXRestore
+metadata:
+  name: awx-restore-pg18-retry
+  namespace: awx
+spec:
+  deployment_name: awx-restored-pg18
+  backup_name: awx-backup-pg18
