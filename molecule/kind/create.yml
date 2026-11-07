@@ -25,3 +25,5 @@
             hostPort: 443
             protocol: TCP
         EOF
+      tags:
+        - always
