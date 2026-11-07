@@ -175,12 +175,13 @@ This runs `ansible-lint` on roles, playbooks, and config samples, and checks tha
 
 ### Molecule Tests
 
-The operator includes a [Molecule](https://ansible.readthedocs.io/projects/molecule/)-based test environment for integration testing. Molecule can run standalone in Docker or inside a Kubernetes cluster.
+The operator includes a [Molecule](https://ansible.readthedocs.io/projects/molecule/)-based test environment for integration testing. The scenarios run against an existing Kubernetes cluster (`default`) or create a kind cluster (`kind`).
 
-Install Molecule:
+Install Molecule and the collections the scenarios use (CI uses Python 3.14):
 
 ```sh
-python -m pip install molecule-plugins[docker]
+python -m pip install -r molecule/requirements.txt
+ansible-galaxy collection install -r molecule/requirements.yml
 ```
 
 #### Testing in Kind (recommended)
