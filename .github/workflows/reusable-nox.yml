@@ -12,13 +12,13 @@ jobs:
             matrix:
                 include:
                 - session: build
-                  python-versions: "3.11"
+                  python-versions: "3.14"
         name: "Run nox ${{ matrix.session }} session"
         steps:
         - name: Check out repo
           uses: actions/checkout@v4
         - name: Setup nox
-          uses: wntrblm/nox@2024.04.15
+          uses: wntrblm/nox@2026.10.20
           with:
               python-versions: "${{ matrix.python-versions }}"
         - name: "Run nox -s ${{ matrix.session }}"
