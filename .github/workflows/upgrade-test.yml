@@ -11,7 +11,9 @@ name: Upgrade from AWX
 # Then backs up the upgraded instance (PostgreSQL 18) and deletes it, restores
 # the 24.6.1 backup into a new instance with an AWXRestore (which migrates the
 # database to Belfry, on PostgreSQL 18), checks the same data there, deletes
-# it, and restores the PostgreSQL 18 backup into a third instance.
+# it, and restores the PostgreSQL 18 backup into a third instance. Finally
+# restores that backup again into the third instance, as when a failed restore
+# is retried, and checks the data once more.
 #
 # Inputs (workflow_dispatch and workflow_call; the schedule and pull requests
 # use the defaults):
@@ -230,6 +232,33 @@ jobs:
           tests/upgrade/port-forward.sh awx-restored-pg18 8082
           password="$(tests/upgrade/admin-password.sh awx-restored-pg18)"
           # The backup was made after verify ran a job on the upgraded instance
+          FACTS_PHASE=after AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$RESTORED_PG18_URL"
+
+      - name: Restore the PostgreSQL 18 backup again into the same instance
+        run: |
+          # The database has AWX's schema with the partitioned job event
+          # tables, as when a restore that failed halfway is retried. A table
+          # that is not in the backup shows that the restore replaced the
+          # database instead of restoring over it.
+          db="$(kubectl -n awx get secret awx-restored-pg18-postgres-configuration -o jsonpath='{.data.database}' | base64 -d)"
+          kubectl -n awx exec awx-restored-pg18-postgres-$PG_VERSION-0 -c postgres -- \
+            psql -v ON_ERROR_STOP=1 -d "$db" -c 'CREATE TABLE restore_retry_marker (id int)'
+          kubectl apply -f tests/upgrade/awxrestore-pg18-retry.yaml
+          tests/upgrade/wait-for-status.sh awxrestore awx-restore-pg18-retry restoreComplete true
+          tests/upgrade/wait-for-awx.sh "$BELFRY_IMAGE" awx-restored-pg18
+          # The restore scaled the instance down; the operator scales it up again
+          for deployment in awx-restored-pg18-web awx-restored-pg18-task; do
+            kubectl -n awx wait "deployment/$deployment" --for=jsonpath='{.status.readyReplicas}'=1 --timeout=20m
+          done
+          tests/upgrade/check-postgres.sh awx-restored-pg18 "$PG_VERSION"
+          marker="$(kubectl -n awx exec awx-restored-pg18-postgres-$PG_VERSION-0 -c postgres -- \
+            psql -tA -d "$db" -c "SELECT to_regclass('public.restore_retry_marker')")"
+          if [ -n "$marker" ]; then echo "The restore did not replace the database" >&2; exit 1; fi
+
+      - name: Check the data and run jobs after restoring into the same instance again
+        run: |
+          tests/upgrade/port-forward.sh awx-restored-pg18 8082
+          password="$(tests/upgrade/admin-password.sh awx-restored-pg18)"
           FACTS_PHASE=after AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$RESTORED_PG18_URL"
 
       - name: Show the cluster state on failure
