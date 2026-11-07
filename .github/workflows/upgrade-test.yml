@@ -13,7 +13,9 @@ name: Upgrade from AWX
 # database to Belfry, on PostgreSQL 18), checks the same data there, deletes
 # it, and restores the PostgreSQL 18 backup into a third instance. Finally
 # restores that backup again into the third instance, as when a failed restore
-# is retried, and checks the data once more.
+# is retried, and checks the data once more. Last, restores a truncated copy of
+# that backup into the third instance and checks that the failed restore did
+# not leave the database user with CREATEDB.
 #
 # Inputs (workflow_dispatch and workflow_call; the schedule and pull requests
 # use the defaults):
@@ -260,6 +262,11 @@ jobs:
           tests/upgrade/port-forward.sh awx-restored-pg18 8082
           password="$(tests/upgrade/admin-password.sh awx-restored-pg18)"
           FACTS_PHASE=after AWX_ADMIN_PASSWORD="$password" python tests/upgrade/check.py verify "$RESTORED_PG18_URL"
+
+      - name: Check that a failed restore revokes CREATEDB
+        run: |
+          # Last: the failed restore leaves the instance without its data
+          tests/upgrade/check-failed-restore.sh awx-backup-pg18 awx-restored-pg18 "$PG_VERSION"
 
       - name: Show the cluster state on failure
         if: failure()
