@@ -19,6 +19,7 @@ import base64
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import time
 import urllib.error
@@ -98,20 +99,66 @@ def wait_for(path, timeout=900):
         time.sleep(5)
 
 
+def job_stdout(job_id, timeout=300):
+    """Return the job's output once all its events are saved.
+
+    The callback receiver saves job events in parallel workers, so they reach
+    the database out of order and some time after the job finished: the play
+    recap can be in the output while the event of an earlier task is not yet.
+    event_processing_finished is true once every emitted event is saved.
+    """
+    deadline = time.time() + timeout
+    while not api('GET', f'/api/v2/jobs/{job_id}/')['event_processing_finished']:
+        if time.time() > deadline:
+            print(f'Job {job_id}: not all events saved after {timeout}s', file=sys.stderr)
+            break
+        time.sleep(2)
+    return api('GET', f'/api/v2/jobs/{job_id}/stdout/?format=txt', text=True)
+
+
+def diagnose_job(job_id):
+    """Print what decides whether the job received the credential secret."""
+    try:
+        job = api('GET', f'/api/v2/jobs/{job_id}/')
+        print(f'--- Diagnostics for job {job_id} ---', file=sys.stderr)
+        print(
+            f'status={job["status"]} emitted_events={job.get("emitted_events")} event_processing_finished={job.get("event_processing_finished")}'
+            f' execution_node={job.get("execution_node")} controller_node={job.get("controller_node")}',
+            file=sys.stderr,
+        )
+        # Names only: the values contain secrets
+        print(f'job_env keys: {sorted(job.get("job_env") or {})}', file=sys.stderr)
+        for credential in api('GET', f'/api/v2/jobs/{job_id}/credentials/')['results']:
+            credential_type = api('GET', f'/api/v2/credential_types/{credential["credential_type"]}/')
+            print(
+                f'credential {credential["id"]} {credential["name"]!r} type {credential_type["id"]} {credential_type["name"]!r}'
+                f' injectors={json.dumps(credential_type["injectors"])} input fields={sorted(credential["inputs"])}',
+                file=sys.stderr,
+            )
+        events = api('GET', f'/api/v2/jobs/{job_id}/job_events/?page_size=200&order_by=counter')
+        print(f'{events["count"]} job events saved:', file=sys.stderr)
+        for event in events['results']:
+            print(f'  {event["counter"]} {event["event"]} task={event.get("task")!r}', file=sys.stderr)
+    except Exception as e:  # noqa: BLE001 - diagnostics must not hide the failure
+        print(f'Diagnostics failed: {e}', file=sys.stderr)
+    # The pods and events of the instance, when run where kubectl works
+    for command in (['kubectl', '-n', 'awx', 'get', 'pods', '-o', 'wide'], ['kubectl', '-n', 'awx', 'get', 'events', '--sort-by=.lastTimestamp']):
+        try:
+            output = subprocess.run(command, capture_output=True, text=True, timeout=60, check=False).stdout
+            print(f'$ {" ".join(command)}\n' + '\n'.join(output.splitlines()[-40:]), file=sys.stderr)
+        except Exception as e:  # noqa: BLE001
+            print(f'{command}: {e}', file=sys.stderr)
+
+
 def run_job(template_id, phase):
     job = api('POST', f'/api/v2/job_templates/{template_id}/launch/', {'extra_vars': {'phase': phase}})
     job = wait_for(f'/api/v2/jobs/{job["job"]}/')
-    # Job events are saved asynchronously, so the output can lag behind the
-    # job's status; wait until the play recap is in
-    deadline = time.time() + 120
-    while True:
-        stdout = api('GET', f'/api/v2/jobs/{job["id"]}/stdout/?format=txt', text=True)
-        if 'PLAY RECAP' in stdout or time.time() > deadline:
-            break
-        time.sleep(5)
+    stdout = job_stdout(job['id'])
     if job['status'] != 'successful':
+        diagnose_job(job['id'])
         raise RuntimeError(f'Job {job["id"]} ({phase}) ended {job["status"]}:\n{stdout}')
     if f'secret-sha256={SECRET_HASH}' not in stdout:
+        diagnose_job(job['id'])
         raise RuntimeError(f'Job {job["id"]} ({phase}) did not receive the credential secret:\n{stdout}')
     return job
 
@@ -192,7 +239,7 @@ def verify():
     get_one('/api/v2/credentials/', NAME)
     get_one('/api/v2/projects/', NAME)
     old_job = api('GET', f'/api/v2/jobs/{state["job"]}/')
-    if old_job['status'] != 'successful' or f'secret-sha256={SECRET_HASH}' not in api('GET', f'/api/v2/jobs/{old_job["id"]}/stdout/?format=txt', text=True):
+    if old_job['status'] != 'successful' or f'secret-sha256={SECRET_HASH}' not in job_stdout(old_job['id']):
         raise RuntimeError('The job from before the upgrade, or its output, did not survive')
     host, facts = host_facts(inventory['id'])
     # Facts cached by a job after the upgrade come from the Belfry execution
